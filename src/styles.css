@@ -1008,6 +1008,45 @@ a svg {
   border: 2px solid var(--blue);
   box-shadow: 0 0 0 4px #2948ec0e;
 }
+.question-body.is-answering .question-text {
+  min-height: 0;
+}
+.live-guess {
+  margin: 16px 0;
+  padding: 15px 18px;
+  border: 1px solid #cbd3ff;
+  border-radius: 13px;
+  background: #f3f5ff;
+  min-width: 0;
+}
+.live-guess-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  font-size: 13px;
+}
+.live-guess-heading strong {
+  overflow-wrap: anywhere;
+}
+.live-guess-heading > span,
+.live-guess-empty {
+  color: #656b80;
+  font-size: 12px;
+}
+.live-guess p {
+  margin: 9px 0 0;
+  max-height: 10rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.answer-visibility {
+  margin: 0 0 7px;
+  font-size: 11px;
+  color: #656b80;
+}
 .answer-send {
   width: 54px;
   display: grid;

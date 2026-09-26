@@ -57,6 +57,11 @@ verification plan.
   The implemented authority is one Cloudflare Durable Object on Workers Free.
 - No future clues or answer keys on participants' devices before reveal,
   including the playing owner/moderator. Only current-question corrections.
+- The current answerer's unsubmitted text is visible live to admitted players
+  and spectators. Keep drafts transient, separate from scoring, attempts and
+  chat, and accept updates only from the current connection in its valid answer
+  window. Pause freezes a draft; submission, timeout, clarification, departure,
+  removal, tab takeover and question end clear it. Never persist draft text.
 - All eight agreed text formats belong to the scope. Do not quietly reduce it
   to tossups or silently change the equal-opportunity team rules.
 - Free content retrieval must fall back to suitable reviewed repository packs.

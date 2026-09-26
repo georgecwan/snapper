@@ -52,7 +52,19 @@ export function Game({
   const state = session.view!;
   const self = state.players.find((player) => player.id === state.selfId);
   const [tab, setTab] = useState<"game" | "scores" | "chat">("game");
-  const [answer, setAnswer] = useState("");
+  const [localAnswer, setLocalAnswer] = useState<{ windowId: string | null; text: string }>({
+    windowId: null,
+    text: "",
+  });
+  const inputWindowId = state.answerWindowId
+    ? `${session.answerInputVersion}:${state.answerWindowId}`
+    : null;
+  // A new attempt must never publish the previous attempt's text during an effect reset.
+  const answer = localAnswer.windowId === inputWindowId ? localAnswer.text : "";
+  const setAnswer = useCallback(
+    (text: string) => setLocalAnswer({ windowId: inputWindowId, text }),
+    [inputWindowId],
+  );
   const [submitted, setSubmitted] = useState(false);
   const [now, setNow] = useState(Date.now());
   const answerInput = useRef<HTMLInputElement>(null);
@@ -71,6 +83,7 @@ export function Game({
     ? Math.max(0, (state.deadline - now - session.clockOffset) / 1000)
     : null;
   const send = session.send;
+  const { updateAnswerDraft, cancelAnswerDraft } = session;
   const buzz = useCallback(() => {
     if (canBuzz) {
       unlockSound();
@@ -97,7 +110,11 @@ export function Game({
   useEffect(() => {
     setAnswer("");
     setSubmitted(false);
-  }, [question?.id]);
+  }, [question?.id, setAnswer]);
+  useEffect(() => {
+    if (canAnswer && !submitted) updateAnswerDraft(answer);
+    else cancelAnswerDraft();
+  }, [answer, canAnswer, submitted, updateAnswerDraft, cancelAnswerDraft]);
   useEffect(() => {
     setSubmitted(false);
   }, [state.attempts.length, state.canAnswer]);
@@ -303,7 +320,7 @@ export function Game({
                 )}
               </div>
             )}
-            <div className="question-body">
+            <div className={`question-body ${state.phase === "answering" ? "is-answering" : ""}`}>
               {question ? (
                 <>
                   <div className="question-context">
@@ -330,6 +347,29 @@ export function Game({
                       Give {question.sequenceLength} items in order, separated by commas.
                     </p>
                   )}
+                  {state.phase === "answering" &&
+                    state.answerWindowId &&
+                    currentAnswerer &&
+                    currentAnswerer.id !== self?.id && (
+                      <section
+                        className="live-guess"
+                        aria-label={`Live guess from ${currentAnswerer.name}`}
+                        aria-live="off"
+                      >
+                        <div className="live-guess-heading">
+                          <strong>
+                            {currentAnswerer.name}
+                            {connected && currentAnswerer.connected && !paused
+                              ? " is typing…"
+                              : "’s guess"}
+                          </strong>
+                          <span>Not submitted</span>
+                        </div>
+                        <p className={state.answerDraft ? "" : "live-guess-empty"}>
+                          {state.answerDraft || "No text yet"}
+                        </p>
+                      </section>
+                    )}
                   {question.answer !== null && (
                     <div className="answer-reveal">
                       <span className="answer-label">
@@ -439,6 +479,9 @@ export function Game({
                       </button>
                     ))}
                   </div>
+                )}
+                {state.phase === "answering" && state.answererId === self?.id && (
+                  <p className="answer-visibility">The lobby can see what you type.</p>
                 )}
                 <form
                   className={`answer-form ${canAnswer ? "is-answering" : ""}`}

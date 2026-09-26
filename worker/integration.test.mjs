@@ -99,6 +99,14 @@ class Client {
       const message = JSON.parse(String(raw));
       this.messages.push(message);
       if (message.type === "state") this.state = message.state;
+      if (
+        message.type === "answer-draft" &&
+        this.state?.phase === "answering" &&
+        message.sessionId === this.state.sessionId &&
+        message.questionId === this.state.question?.id &&
+        message.answerWindowId === this.state.answerWindowId
+      )
+        this.state = { ...this.state, answerDraft: message.text };
     });
     const outcome = await new Promise((resolve, reject) => {
       ws.once("open", () => resolve(101));
@@ -129,6 +137,19 @@ class Client {
     };
     this.socket.send(JSON.stringify(command));
     return command;
+  }
+  draft(text, overrides = {}) {
+    assert.ok(this.state?.question && this.state.answerWindowId);
+    const message = {
+      type: "answer-draft",
+      sessionId: this.state.sessionId,
+      questionId: this.state.question.id,
+      answerWindowId: this.state.answerWindowId,
+      text,
+      ...overrides,
+    };
+    this.socket.send(JSON.stringify(message));
+    return message;
   }
   result(command) {
     return eventually(
@@ -480,5 +501,308 @@ test(
     await owner.connect();
     owner.send({ type: "close-session" });
     await eventually(() => owner.messages.some((m) => m.type === "ended"), "explicit owner close");
+  },
+);
+
+test(
+  "live answer drafts stay transient, authorized and scoped to the active answer window",
+  { skip: !origin, timeout: 60_000 },
+  async (t) => {
+    assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname));
+    const clients = [];
+    const make = () => {
+      const client = new Client();
+      clients.push(client);
+      return client;
+    };
+    t.after(() => clients.forEach((client) => client.close()));
+    let owner = make();
+    const first = await owner.http("/status");
+    assert.equal(first.body.devAuth, true);
+    assert.equal((await owner.http("/dev-owner", {})).status, 200);
+    assert.equal((await owner.http("/open", { name: "Draft owner" })).status, 200);
+    await owner.connect();
+    if (first.body.active) {
+      owner.send({ type: "close-session" });
+      await eventually(() => owner.messages.some((m) => m.type === "ended"), "clear prior session");
+      owner.close();
+      owner.state = null;
+      owner.messages = [];
+      await owner.http("/open", { name: "Draft owner" });
+      await owner.connect();
+    }
+    const ack = async (client, action) => {
+      const result = await client.result(client.send(action));
+      assert.equal(result.type, "ack", `${action.type}: ${result.message ?? ""}`);
+    };
+    await ack(owner, {
+      type: "configure",
+      config: {
+        ...owner.state.config,
+        mode: "ffa",
+        source: "bundled",
+        formats: ["snapper"],
+        difficulty: "any",
+        shortProgressive: false,
+        autoAdvance: false,
+        answerMs: 30_000,
+        graceMs: 30_000,
+      },
+    });
+    async function admit(name, role) {
+      const client = make();
+      assert.equal((await client.http("/request", { name, role })).status, 200);
+      const pending = await eventually(
+        () => owner.state.pendingAdmissions.find((request) => request.name === name),
+        `${name} pending`,
+      );
+      await ack(owner, { type: "approve", requestId: pending.id });
+      return client;
+    }
+    const friend = await admit("Draft answerer", "player");
+    await friend.connect();
+    const spectator = await admit("Draft spectator", "spectator");
+    await spectator.connect();
+    // Approve in advance so connecting this viewer later tests a full snapshot,
+    // without requiring an intervening game command to publish the draft.
+    const late = await admit("Late draft spectator", "spectator");
+    let lateConnected = false;
+    const observers = () => [owner, spectator, ...(lateConnected ? [late] : [])];
+    const draftVisible = (text, description) =>
+      eventually(
+        () => observers().every((client) => client.state?.answerDraft === text),
+        description,
+      );
+    let barriers = 0;
+    async function barrier(client) {
+      const text = `Draft test barrier ${++barriers}`;
+      // A normal command on the same socket is processed after the preceding
+      // draft frame. Its snapshot makes silent rejection assertions observable.
+      await ack(client, { type: "chat", text });
+      await eventually(
+        () => observers().every((observer) => observer.state.chat.some((m) => m.text === text)),
+        "draft validation barrier reaches observers",
+      );
+    }
+    await ack(owner, { type: "start" });
+    await eventually(() => friend.state?.canBuzz, "answerer can buzz");
+    await ack(friend, { type: "buzz" });
+    await eventually(
+      () => observers().every((client) => client.state.answererId === friend.state.selfId),
+      "answer window reaches observers",
+    );
+    const originalWindow = friend.state.answerWindowId;
+    const originalQuestion = friend.state.question.id;
+    assert.ok(originalWindow);
+    const scores = Object.fromEntries(
+      owner.state.players.map((player) => [player.id, player.score]),
+    );
+    const teamScores = { ...owner.state.teamScores };
+    const assertUnsubmitted = () => {
+      assert.equal(owner.state.attempts.length, 0, "Drafts do not create answer attempts");
+      for (const [id, score] of Object.entries(scores))
+        assert.equal(owner.state.players.find((player) => player.id === id)?.score, score);
+      assert.deepEqual(owner.state.teamScores, teamScores);
+      assert.equal(owner.state.question.answer, null, "Typing must not reveal the answer key");
+    };
+    const frame = friend.draft("Par");
+    await draftVisible("Par", "player and spectator see the live draft");
+    assert.ok(
+      owner.messages.some((message) => message.type === "answer-draft" && message.text === "Par"),
+    );
+    assert.ok(
+      spectator.messages.some(
+        (message) => message.type === "answer-draft" && message.text === "Par",
+      ),
+    );
+    assertUnsubmitted();
+    friend.draft("");
+    await draftVisible("", "deleting all text clears the live draft");
+    friend.draft("Paris? Still thinking");
+    await draftVisible("Paris? Still thinking", "edits replace the draft");
+
+    await late.connect();
+    lateConnected = true;
+    assert.equal(
+      late.state.answerDraft,
+      "Paris? Still thinking",
+      "New viewers receive the latest draft in their snapshot",
+    );
+    assert.equal(late.state.answerWindowId, originalWindow);
+    assert.equal(late.state.question.answer, null);
+
+    await ack(owner, { type: "pause" });
+    assert.equal(
+      owner.state.answerWindowId,
+      originalWindow,
+      "Pausing retains the same attempt identity",
+    );
+    assert.ok(owner.state.pausedReasons.length);
+    await sleep(220);
+    friend.draft("Must not replace the paused draft");
+    await barrier(friend);
+    await draftVisible("Paris? Still thinking", "pause freezes the existing draft");
+    await ack(owner, { type: "resume" });
+    assert.equal(
+      owner.state.answerWindowId,
+      originalWindow,
+      "Resuming retains the same attempt identity",
+    );
+    await eventually(() => friend.state.canAnswer, "answerer resumes typing");
+
+    const invalid = [
+      [owner, "Another player cannot type for the answerer", {}],
+      [spectator, "A spectator cannot type for the answerer", {}],
+      [friend, "A stale session cannot update the draft", { sessionId: "ended-session" }],
+      [friend, "A stale question cannot update the draft", { questionId: "previous-question" }],
+      [friend, "A stale attempt cannot update the draft", { answerWindowId: "previous-window" }],
+      [friend, "A claimed identity is not trusted", { answererId: owner.state.selfId }],
+      [friend, "Oversized drafts are rejected", { text: "x".repeat(501) }],
+    ];
+    for (const [client, description, overrides] of invalid) {
+      await sleep(220); // Each probe gets a draft token instead of testing only rate limiting.
+      client.draft(description, overrides);
+      await barrier(client);
+      assert.equal(owner.state.answerDraft, "Paris? Still thinking", description);
+      assert.equal(spectator.state.answerDraft, "Paris? Still thinking", description);
+    }
+    assertUnsubmitted();
+    await sleep(220);
+    friend.draft("A valid edit after rejected messages");
+    await draftVisible(
+      "A valid edit after rejected messages",
+      "valid edits survive rejected traffic",
+    );
+
+    // The typing quota is independent of real game actions: excess draft
+    // frames must not consume the answer submission's action allowance.
+    for (let i = 0; i < 16; i++) friend.draft(`Burst typing ${i}`);
+    const submitted = "deliberately incorrect integration answer 847";
+    await ack(friend, { type: "answer", text: submitted });
+    await eventually(
+      () => owner.state.attempts.length === 1,
+      "only the submitted answer becomes an attempt",
+    );
+    await draftVisible("", "submission clears the draft");
+    assert.equal(owner.state.attempts[0].answer, submitted);
+    assert.equal(owner.state.attempts[0].verdict, "reject");
+    assert.equal(owner.state.answerWindowId, null);
+    assert.ok(owner.state.chat.every((message) => !message.text.startsWith("Burst typing")));
+
+    await eventually(() => owner.state.canBuzz, "another player can answer the same question");
+    await ack(owner, { type: "buzz" });
+    assert.equal(owner.state.question.id, originalQuestion);
+    assert.notEqual(owner.state.answerWindowId, originalWindow);
+    const nextWindow = owner.state.answerWindowId;
+    owner.draft("Late text from the previous attempt", { answerWindowId: originalWindow });
+    await barrier(owner);
+    assert.equal(
+      owner.state.answerDraft,
+      "",
+      "Even the current answerer cannot update an old window",
+    );
+    owner.draft("Clear this when my new tab connects");
+    await draftVisible("Clear this when my new tab connects", "current answerer can type");
+
+    const oldOwner = owner;
+    const oldSocket = oldOwner.socket;
+    oldSocket.on("message", (raw) => {
+      if (String(raw) === "pong") return;
+      if (JSON.parse(String(raw)).type === "replaced" && oldSocket.readyState === WebSocket.OPEN)
+        oldSocket.send(
+          JSON.stringify({
+            ...frame,
+            answerWindowId: nextWindow,
+            text: "Superseded tab overwrite",
+          }),
+        );
+    });
+    const replacement = make();
+    replacement.cookies = new Map(oldOwner.cookies);
+    await replacement.connect();
+    owner = replacement;
+    await eventually(
+      () => oldOwner.messages.some((message) => message.type === "replaced"),
+      "answerer's old tab is replaced",
+    );
+    assert.equal(owner.state.selfId, oldOwner.state.selfId);
+    assert.equal(owner.state.answerWindowId, nextWindow);
+    assert.equal(owner.state.answerDraft, "", "A tab takeover does not recover unsent text");
+    await barrier(owner);
+    await draftVisible("", "takeover clears observers and rejects the superseded connection");
+    oldOwner.close();
+    owner.draft("The new tab can type");
+    await draftVisible(
+      "The new tab can type",
+      "replacement connection owns the current answer window",
+    );
+
+    await ack(owner, { type: "configure", config: { ...owner.state.config, answerMs: 3000 } });
+    await ack(owner, { type: "end-block" });
+    await eventually(
+      () => owner.state.question?.id !== originalQuestion && owner.state.canBuzz,
+      "next block applies short answer timer",
+    );
+    await draftVisible("", "question end clears all draft text");
+    assert.equal(owner.state.answerWindowId, null);
+    assert.equal(owner.state.config.answerMs, 3000);
+    await ack(owner, { type: "buzz" });
+    owner.draft("An unfinished answer must not be submitted on timeout");
+    await draftVisible(
+      "An unfinished answer must not be submitted on timeout",
+      "timeout draft is visible",
+    );
+    await eventually(
+      () => owner.state.phase !== "answering" && owner.state.attempts.length === 1,
+      "answer deadline expires",
+      10_000,
+    );
+    await draftVisible("", "timeout clears live text");
+    assert.equal(
+      owner.state.attempts[0].answer,
+      "",
+      "Timeout must not submit the draft as an answer",
+    );
+    assert.equal(owner.state.attempts[0].verdict, "reject");
+    assert.equal(owner.state.answerWindowId, null);
+
+    await ack(owner, { type: "configure", config: { ...owner.state.config, answerMs: 30_000 } });
+    const timeoutQuestion = owner.state.question.id;
+    await ack(owner, { type: "end-block" });
+    await eventually(
+      () => friend.state.question?.id !== timeoutQuestion && friend.state.canBuzz,
+      "fresh block for disconnect cleanup",
+    );
+    await ack(friend, { type: "buzz" });
+    friend.draft("Clear immediately when I disconnect");
+    await draftVisible("Clear immediately when I disconnect", "disconnect draft is visible");
+    const disconnectedId = friend.state.selfId;
+    friend.close();
+    await eventually(
+      () => owner.state.players.find((player) => player.id === disconnectedId)?.connected === false,
+      "answerer disconnect is detected",
+    );
+    await draftVisible("", "disconnect clears the draft before the answer timer expires");
+    assert.equal(owner.state.attempts.length, 0);
+
+    friend.state = null;
+    friend.messages = [];
+    await friend.connect();
+    await eventually(() => friend.state.canAnswer, "returning answerer keeps the active attempt");
+    assert.equal(friend.state.answerDraft, "", "Reconnecting does not restore unsent text");
+    friend.draft("Clear this if I am removed");
+    await draftVisible("Clear this if I am removed", "reconnected answerer can type again");
+    await ack(owner, { type: "kick", playerId: disconnectedId });
+    await eventually(
+      () => friend.messages.some((message) => message.type === "ended"),
+      "removed answerer loses access",
+    );
+    await draftVisible("", "removal clears the live draft");
+
+    owner.send({ type: "close-session" });
+    await eventually(
+      () => spectator.messages.some((message) => message.type === "ended"),
+      "draft test session closes",
+    );
   },
 );

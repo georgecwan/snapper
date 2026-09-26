@@ -27,6 +27,7 @@ import {
 import type { Env } from "./index";
 import type { GuestToken } from "./security";
 import { QuestionPacks } from "./question-packs";
+import { AnswerDrafts } from "./answer-drafts";
 
 const PENDING_MS = 5 * 60_000;
 const STALE_MS = 90_000;
@@ -87,6 +88,7 @@ export class Lobby extends DurableObject<Env> {
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null;
   private lastReading = "";
   private questionPacks: QuestionPacks;
+  private answerDrafts = new AnswerDrafts();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -185,9 +187,15 @@ export class Lobby extends DurableObject<Env> {
 
   private broadcast(): void {
     if (!this.record) return;
+    const now = Date.now();
     for (const ws of this.sockets()) {
       const id = this.identity(ws)!;
-      const view = publicView(this.record.game, id.pid, Date.now());
+      const view = publicView(this.record.game, id.pid, now);
+      view.answerDraft = this.answerDrafts.text(
+        view,
+        view.answererId ? this.record.connections[view.answererId] : undefined,
+        now,
+      );
       view.pendingAdmissions = id.owner ? this.record.pending.map((p) => ({ ...p })) : [];
       view.notice = this.record.notice ?? view.notice;
       if (this.record.contentBlocked) {
@@ -210,6 +218,7 @@ export class Lobby extends DurableObject<Env> {
   private async end(message: string): Promise<void> {
     const sockets = this.sockets();
     this.record = null;
+    this.answerDrafts.clear();
     if (this.readTimer) clearTimeout(this.readTimer);
     if (this.deadlineTimer) clearTimeout(this.deadlineTimer);
     this.readTimer = this.deadlineTimer = null;
@@ -582,6 +591,7 @@ export class Lobby extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, [pid]);
     this.record.game = connectedGame;
     this.record.connections[pid] = connectionId;
+    this.answerDrafts.clear(pid);
     if (seated.role === "player") this.record.hadConnectedPlayer = true;
     for (const old of oldSockets) {
       this.send(old, { type: "replaced", message: "A newer tab has taken over this seat." });
@@ -616,6 +626,21 @@ export class Lobby extends DurableObject<Env> {
         ws.send("pong");
         return;
       }
+      let input: unknown;
+      try {
+        input = JSON.parse(data);
+      } catch {
+        // Invalid command handling below still applies its ordinary action quota.
+      }
+      if (
+        input !== null &&
+        typeof input === "object" &&
+        "type" in input &&
+        input.type === "answer-draft"
+      ) {
+        this.relayAnswerDraft(ws, id, input);
+        return;
+      }
       const now = Date.now();
       if (now - id.windowStart >= 5000) {
         id.count = 0;
@@ -630,7 +655,7 @@ export class Lobby extends DurableObject<Env> {
       }
       let command: ClientCommand;
       try {
-        command = commandSchema.parse(JSON.parse(data));
+        command = commandSchema.parse(input);
       } catch {
         this.send(ws, { type: "error", message: "That action is invalid." });
         return;
@@ -690,6 +715,26 @@ export class Lobby extends DurableObject<Env> {
           : { type: "ack", commandId: command.id },
       );
     });
+  }
+
+  private relayAnswerDraft(ws: WebSocket, id: SocketIdentity, input: unknown): void {
+    if (!this.record || ws.readyState !== WebSocket.OPEN) return;
+    const now = Date.now();
+    const rate = this.answerDrafts.rate(ws, now);
+    if (rate === "close") {
+      ws.close(1008, "Draft limit exceeded");
+      return;
+    }
+    if (rate === "drop") return;
+    const view = publicView(this.record.game, id.pid, now);
+    const message = this.answerDrafts.accept(
+      input,
+      view,
+      { playerId: id.pid, connectionId: id.connectionId },
+      view.answererId ? this.record.connections[view.answererId] : undefined,
+      now,
+    );
+    if (message) for (const observer of this.sockets()) this.send(observer, message);
   }
 
   private async apply(

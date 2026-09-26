@@ -194,6 +194,10 @@ export interface SessionView {
   chat: ChatMessage[];
   deadline: number | null;
   answererId: string | null;
+  /** Identifies one answer attempt, including a separate clarification window. */
+  answerWindowId: string | null;
+  /** Unsubmitted player text, relayed transiently by the coordinator. */
+  answerDraft: string;
   eligibleIds: string[];
   canBuzz: boolean;
   canAnswer: boolean;
@@ -247,8 +251,20 @@ export const commandSchema = z
   })
   .strict();
 export type ClientCommand = z.infer<typeof commandSchema>;
+export const ANSWER_DRAFT_INTERVAL_MS = 200;
+export const answerDraftSchema = z
+  .object({
+    type: z.literal("answer-draft"),
+    sessionId: z.string().min(1).max(100),
+    questionId: z.string().min(1).max(100),
+    answerWindowId: z.string().min(1).max(250),
+    text: z.string().max(500),
+  })
+  .strict();
+export type AnswerDraftMessage = z.infer<typeof answerDraftSchema>;
 export type ServerMessage =
   | { type: "state"; state: SessionView }
+  | AnswerDraftMessage
   | {
       type: "reading";
       questionId: string;

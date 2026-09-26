@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientCommand, GameAction, ServerMessage, SessionView, SiteStatus } from "./protocol";
+import { AnswerDraftSender, matchesAnswerDraft } from "./answer-draft";
 
 export type Connection =
   | "loading"
@@ -21,10 +22,26 @@ export function useSession() {
   const [busy, setBusy] = useState(false);
   const [clockOffset, setClockOffset] = useState(0);
   const [epoch, setEpoch] = useState(0);
+  const [answerInputVersion, setAnswerInputVersion] = useState(0);
   const socket = useRef<WebSocket | null>(null);
   const viewRef = useRef<SessionView | null>(null);
   const stopped = useRef(false);
   const mounted = useRef(true);
+  const drafts = useRef<AnswerDraftSender | null>(null);
+  if (!drafts.current)
+    drafts.current = new AnswerDraftSender((draft) => {
+      const current = viewRef.current;
+      if (
+        stopped.current ||
+        socket.current?.readyState !== WebSocket.OPEN ||
+        !current?.canAnswer ||
+        !matchesAnswerDraft(current, draft)
+      )
+        return false;
+      socket.current.send(JSON.stringify(draft));
+      return true;
+    });
+  const cancelAnswerDraft = useCallback(() => drafts.current?.cancel(), []);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch(`${API}/status`, {
@@ -92,6 +109,8 @@ export function useSession() {
     const controller = new AbortController();
     const connect = () => {
       if (disposed || stopped.current) return;
+      // Rejoining an answer window starts with a fresh input, even if its ID is unchanged.
+      setAnswerInputVersion((version) => version + 1);
       setConnection(attempts ? "reconnecting" : "connecting");
       const url = new URL(`${API}/connect`, window.location.href);
       url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -118,29 +137,50 @@ export function useSession() {
             message.state.revision < viewRef.current.revision
           )
             return;
+          const previousSelf = viewRef.current?.players.find(
+            (player) => player.id === viewRef.current?.selfId,
+          );
+          const nextSelf = message.state.players.find(
+            (player) => player.id === message.state.selfId,
+          );
+          if (previousSelf?.role !== nextSelf?.role)
+            setAnswerInputVersion((version) => version + 1);
+          if (
+            !message.state.canAnswer ||
+            viewRef.current?.sessionId !== message.state.sessionId ||
+            viewRef.current?.answerWindowId !== message.state.answerWindowId
+          )
+            drafts.current?.cancel();
           attempts = 0;
           setConnection("connected");
           setError(null);
           viewRef.current = message.state;
           setView(message.state);
           setClockOffset(message.state.serverTime - Date.now());
+        } else if (message.type === "answer-draft") {
+          const current = viewRef.current;
+          if (!matchesAnswerDraft(current, message)) return;
+          const next = { ...current!, answerDraft: message.text };
+          // Apply frames in socket order; a deferred updater could restore an older ref.
+          viewRef.current = next;
+          setView(next);
         } else if (message.type === "reading") {
-          setView((current) => {
-            if (!current?.question || current.question.id !== message.questionId) return current;
-            const next = {
-              ...current,
-              question: {
-                ...current.question,
-                text: message.text,
-                readingComplete: message.readingComplete,
-              },
-            };
-            viewRef.current = next;
-            return next;
-          });
+          const current = viewRef.current;
+          if (!current?.question || current.question.id !== message.questionId) return;
+          const next = {
+            ...current,
+            question: {
+              ...current.question,
+              text: message.text,
+              readingComplete: message.readingComplete,
+            },
+          };
+          viewRef.current = next;
+          setView(next);
         } else if (message.type === "error") {
           setError(message.message);
         } else if (message.type === "ended" || message.type === "replaced") {
+          drafts.current?.cancel();
           stopped.current = true;
           setConnection(message.type);
           setTerminalMessage(message.message);
@@ -151,6 +191,7 @@ export function useSession() {
         }
       };
       ws.onclose = () => {
+        drafts.current?.cancel();
         clearInterval(heartbeat);
         if (disposed || stopped.current) return;
         if (socket.current === ws) socket.current = null;
@@ -185,6 +226,7 @@ export function useSession() {
     };
     connect();
     return () => {
+      drafts.current?.cancel();
       disposed = true;
       controller.abort();
       clearTimeout(retryTimer);
@@ -236,6 +278,22 @@ export function useSession() {
 
   const renderedSessionId = view?.sessionId;
   const renderedQuestionId = view?.question?.id ?? null;
+  const renderedAnswerWindowId = view?.answerWindowId ?? null;
+  const updateAnswerDraft = useCallback(
+    (text: string) => {
+      if (!renderedSessionId || !renderedQuestionId || !renderedAnswerWindowId) return;
+      const draft = {
+        type: "answer-draft" as const,
+        sessionId: renderedSessionId,
+        questionId: renderedQuestionId,
+        answerWindowId: renderedAnswerWindowId,
+        text: text.slice(0, 500),
+      };
+      if (!viewRef.current?.canAnswer || !matchesAnswerDraft(viewRef.current, draft)) return;
+      drafts.current?.update(draft);
+    },
+    [renderedSessionId, renderedQuestionId, renderedAnswerWindowId],
+  );
   const send = useCallback(
     (action: GameAction) => {
       const current = viewRef.current;
@@ -247,6 +305,7 @@ export function useSession() {
         setError("That session has changed. Please try again.");
         return false;
       }
+      if (action.type === "answer") drafts.current?.cancel();
       const command: ClientCommand = {
         id: crypto.randomUUID(),
         sessionId: current.sessionId,
@@ -284,8 +343,11 @@ export function useSession() {
     terminalMessage,
     busy,
     clockOffset,
+    answerInputVersion,
     post,
     send,
+    updateAnswerDraft,
+    cancelAnswerDraft,
     retry,
     clearError: () => setError(null),
   };

@@ -156,6 +156,16 @@ tossup or standalone Snapper can be a one-question block.
   their reveal point. This includes owners, moderators and spectators.
 - Answers are typed and judged automatically, with accepted aliases and
   conservative typo tolerance. Do not use unrestricted substring matching.
+- While the current answerer types, all admitted players and spectators see
+  their unsubmitted answer text live. A draft is presentation only: it does not
+  submit an answer, create an attempt, change scores or enter chat/history.
+  Only the current answerer's active connection may update it, within the
+  current answer window. Reject stale, expired and impersonated updates.
+- Drafts are transient and are never saved with session records or browser
+  preferences. Clear them on submission, timeout, clarification, answerer
+  disconnection/removal, tab takeover and question end. A pause freezes the
+  existing draft; editing resumes in the same answer window after the pause.
+  A participant joining during an answer sees the latest valid draft.
 - Where the answer rules support it, an insufficiently specific answer gets
   one clarification attempt with a fresh **8-second** timer.
 - Standard answer window: **8 seconds**. Sequence answer window: **20 seconds**.
@@ -271,8 +281,8 @@ and corrections do not count as additional presented prompts.
 - Prioritize question readability and mobile typing. Keep the question,
   eligibility, answer field and deadline usable with the phone keyboard open.
 - Keyboard buzzing must respect focused inputs and buttons. Do not announce
-  every progressive character through a screen reader or convey eligibility
-  solely through color. Respect reduced-motion preferences.
+  every progressive character or live answer keystroke through a screen reader
+  or convey eligibility solely through color. Respect reduced-motion preferences.
 - Clearly distinguish waiting for approval, connecting, reconnecting, paused,
   full, exhausted content and temporarily unavailable service.
 - Host/moderator controls belong at the top to minimize scrolling. Action menus

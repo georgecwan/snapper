@@ -47,6 +47,17 @@ The playing owner's browser receives the same unrevealed-content protection as
 other browsers. Public question IDs do not disclose source IDs or answer words.
 The server sends only the revealed question prefix and retains full answer rules.
 
+Live guesses use a separate `answer-draft` WebSocket frame, scoped to the session,
+question and answer attempt. `src/snapper/answer-draft.ts` coalesces edits to five
+updates per second; `worker/answer-drafts.ts` independently validates and limits
+them. Only the current answerer's current connection can publish. Drafts live in
+memory, outside engine actions, storage and command receipts, and never score or
+extend a timer. Snapshots include the current draft for new observers. Pause
+freezes it; attempt changes, departure and connection replacement clear it.
+The input is also scoped to its connection and seat so reconnecting cannot
+republish an old guess. Socket projections update in message order before React
+renders them, keeping authority checks current even when renders are batched.
+
 ## Development and build
 
 Use Node.js 24 (the version in `.nvmrc`); Node.js 22.18 or newer is required.
@@ -161,6 +172,24 @@ Production OAuth, geographic latency and real Free-plan usage cannot be verified
 by the local emulator. No production deployment has been performed yet.
 
 ## Verification log
+
+Live answer drafts, verified locally on 2026-09-26:
+
+- `npm test`: **106 passing tests**. Draft tests cover coalescing, deletion,
+  answer-window identity, authorization, bounds, rate limits and lifecycle cleanup.
+  Frontend/Worker typechecking and scoped lint pass.
+- `npm run test:integration`: **4 passing tests**, including players and
+  spectators observing edits, late-join snapshots, pause, submission, timeout,
+  disconnect, takeover, removal and stale/spoofed-frame rejection. Typing has a
+  separate quota from commands and never creates attempts or exposes answer keys.
+- Browser checks exercised another player's live text on desktop/mobile, edits,
+  erasure, and actual mobile answer entry followed by a correctly scored
+  submission. Draft text appears directly beneath the question. No console
+  errors occurred; temporary settings were restored and the test lobby ended.
+- Production build and Worker packaging dry run pass. Desktop/mobile smoke
+  checks pass for both development and built output, with matching verdicts,
+  no overflow and no console/brand/auth warnings. Both viewport images were
+  reviewed (`screenshots/snapper-live-draft-dev*` and `snapper-live-draft-built*`).
 
 Additional shortcuts, verified locally on 2026-09-26:
 

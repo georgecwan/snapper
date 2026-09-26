@@ -1076,6 +1076,11 @@ export function publicView(state: Session, selfId: string, now: number): Session
           : q.graceAt
       : null,
     answererId: q?.answerer ?? null,
+    answerWindowId:
+      state.phase === "answering" && q?.answerer && b
+        ? `${state.id}:block:${state.blockNumber}:question:${b.index}:answer:${q.attempts.length}:${q.answerer}`
+        : null,
+    answerDraft: "",
     eligibleIds,
     canBuzz: !!self?.connected && eligibleIds.includes(selfId),
     canAnswer:
