@@ -5,6 +5,40 @@ import WebSocket from "ws";
 // Run against an isolated `wrangler dev --env local` instance, never production.
 const origin = process.env.SNAPPER_TEST_ORIGIN;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test(
+  "question pack assets are never available through the public Worker",
+  { skip: !origin },
+  async () => {
+    const owner = new Client();
+    await owner.http("/dev-owner", {});
+    for (const path of [
+      "/_question-packs/manifest.json",
+      "/_question-packs/manifest.json?install=1",
+      "/%5fquestion-packs/manifest.json",
+      "/_question-packs%2fmanifest.json",
+      "/%255fquestion-packs/manifest.json",
+      "//_question-packs/manifest.json",
+      "/foo/%2e%2e/_question-packs/manifest.json",
+    ]) {
+      for (const method of ["GET", "HEAD", "OPTIONS"]) {
+        const response = await fetch(`${origin}${path}`, {
+          method,
+          headers: {
+            Cookie: owner.cookie(),
+            "Sec-Fetch-Mode": "navigate",
+            Range: "bytes=0-100",
+          },
+          redirect: "manual",
+        });
+        assert.equal(response.status, 404, `${method} ${path}`);
+        assert.equal(response.headers.get("Cache-Control"), "no-store");
+        assert.doesNotMatch(await response.text(), /"groups"|"shards"|"canonical"/);
+      }
+    }
+  },
+);
+
 async function eventually(check, description, timeout = 7000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -21,6 +55,7 @@ class Client {
   state = null;
   socket = null;
   heartbeat = null;
+  closeEvents = [];
   async http(path, body, extra = {}) {
     const response = await fetch(`${origin}/api/snapper${path}`, {
       method: body === undefined ? "GET" : "POST",
@@ -45,8 +80,20 @@ class Client {
   async connect(expected = 101) {
     const ws = new WebSocket(`${origin.replace(/^http/, "ws")}/api/snapper/connect`, {
       headers: { Origin: origin, Cookie: this.cookie() },
+      // The local Worker proxy can retain TCP after both Close frames have
+      // crossed. Bound ws's default 30-second transport cleanup; the removal test
+      // still requires the server's normal Close code/reason and wasClean.
+      closeTimeout: 1000,
     });
     this.socket = ws;
+    ws.addEventListener("close", (event) => {
+      this.closeEvents.push({
+        socket: ws,
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+      });
+    });
     ws.on("message", (raw) => {
       if (String(raw) === "pong") return;
       const message = JSON.parse(String(raw));
@@ -292,11 +339,15 @@ test(
       "team selection makes the next block playable",
     );
 
-    // The reviewed local pack is medium difficulty; easy + bundled is deliberately empty.
+    // Imported short/tossup packs cover every rating. The authored sequence
+    // pack is medium, so easy sequences are deliberately an empty filter.
     assert.equal(
       (
         await owner.result(
-          owner.send({ type: "configure", config: { ...owner.state.config, difficulty: "easy" } }),
+          owner.send({
+            type: "configure",
+            config: { ...owner.state.config, formats: ["sequence"], difficulty: "easy" },
+          }),
         )
       ).type,
       "ack",
@@ -333,7 +384,85 @@ test(
       "A delayed buzz cannot claim the following question",
     );
 
-    for (const client of [...players.filter((c) => c !== friend), spectator]) client.close();
+    await t.test(
+      "moderator removal revokes access and immediately frees the full player seat",
+      async () => {
+        const removed = players[2];
+        const removedId = removed.state.selfId;
+        const moderator = players[3];
+        const moderatorId = moderator.state.selfId;
+        assert.equal(
+          (await friend.result(friend.send({ type: "kick", playerId: removedId }))).type,
+          "error",
+          "An ordinary guest cannot remove another participant",
+        );
+        assert.equal(
+          (
+            await owner.result(
+              owner.send({ type: "promote", playerId: moderatorId, moderator: true }),
+            )
+          ).type,
+          "ack",
+        );
+        await eventually(
+          () => moderator.state.players.find((p) => p.id === moderatorId)?.moderator,
+          "moderator grant arrives",
+        );
+        const protectedOwner = await moderator.result(
+          moderator.send({ type: "kick", playerId: owner.state.selfId }),
+        );
+        assert.equal(protectedOwner.type, "error");
+        assert.match(protectedOwner.message, /owner cannot be removed/i);
+        assert.equal(owner.state.players.find((p) => p.owner)?.connected, true);
+
+        const oldIdentity = make();
+        oldIdentity.cookies = new Map(removed.cookies);
+        assert.equal(
+          (await moderator.result(moderator.send({ type: "kick", playerId: removedId }))).type,
+          "ack",
+        );
+        await eventually(
+          () => removed.messages.some((m) => m.type === "ended" && /removed you/.test(m.message)),
+          "removed guest receives the session-ended notification",
+        );
+        await eventually(
+          () => removed.socket.readyState === WebSocket.CLOSED,
+          "removed guest socket closes",
+        );
+        const closed = removed.closeEvents.find((event) => event.socket === removed.socket);
+        assert.equal(closed?.code, 1000, "The server sends a normal protocol Close frame");
+        assert.equal(closed?.reason, "Removed from session");
+        assert.equal(closed?.wasClean, true, "Both peers exchange protocol Close frames");
+        await eventually(
+          () => owner.state.players.filter((p) => p.connected && p.role === "player").length === 15,
+          "removal immediately frees a player seat",
+        );
+        assert.equal(owner.state.players.find((p) => p.id === removedId)?.connected, false);
+        assert.equal((await oldIdentity.http("/status")).body.admission, "rejected");
+        await oldIdentity.connect(403);
+
+        await waiting.connect();
+        assert.equal(
+          waiting.state.players.find((p) => p.id === waiting.state.selfId)?.role,
+          "player",
+          "The already-approved capacity waiter occupies the newly available seat",
+        );
+        await eventually(
+          () => owner.state.players.filter((p) => p.connected && p.role === "player").length === 16,
+          "replacement restores the full player capacity",
+        );
+        assert.equal(
+          (await removed.http("/request", { name: "Returning removed guest", role: "player" }))
+            .status,
+          200,
+        );
+        assert.equal((await removed.http("/status")).body.admission, "pending");
+        await removed.connect(403);
+      },
+    );
+
+    for (const client of [...players.filter((c) => c !== friend), spectator, waiting])
+      client.close();
     await eventually(
       () => friend.messages.some((m) => m.type === "ended"),
       "spectators cannot preserve empty session",

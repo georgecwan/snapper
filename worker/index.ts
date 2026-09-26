@@ -12,6 +12,7 @@ import {
   type AuthEnv,
 } from "./security";
 import { beginGitHubSignIn, completeGitHubSignIn } from "./oauth";
+import { privateAssetPath } from "./question-packs";
 export { Lobby } from "./lobby";
 
 export interface Env extends AuthEnv {
@@ -49,6 +50,9 @@ function error(message: string, status = 400): Response {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    // This precedes auth, installation-page routing, and every ASSETS fetch.
+    // Pack contents are server-only even when the requester is the owner.
+    if (privateAssetPath(url.pathname)) return error("Not found", 404);
     if (!url.pathname.startsWith("/api/snapper/")) {
       if (url.searchParams.get("install") === "1") {
         url.pathname = "/__grok/install.html";

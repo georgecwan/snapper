@@ -15,6 +15,11 @@ verification plan.
   deployment steps. Cloudflare Workers Builds with GitHub is the preferred deploy
   flow; once connected, pushes to `main` deploy automatically. No connection has
   been configured by this agent. Vercel Git deployments are disabled.
+- `data/README.md` describes the licensed repository question snapshots and
+  generated bank. Read it before editing imports. Do not expose raw question
+  packs through `public/`, frontend imports, asset rewrites, or an API. Keep
+  `assets.run_worker_first: true` and the private-path guard; this is part of the
+  unrevealed-answer boundary. Builds do not download question sources.
 - All final gameplay defaults and progression rules have been approved. Continue
   implementation within that contract; do not restart requirements discovery.
   No production deployment has been made by this implementation session.
@@ -61,6 +66,8 @@ verification plan.
   The existing green/brass Lectern appearance is not a design preference.
 - No marketing copy or promotional landing page. This is a game for friends;
   show a direct functional lobby with plain action labels.
+- Keep host controls at the top, menus dismissible on outside click/Escape, and
+  P (pause/resume)/N (next) limited to permitted actions outside text input.
 
 ## Working in this repository
 

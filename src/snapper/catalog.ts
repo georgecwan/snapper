@@ -1,6 +1,15 @@
 import { CLUES, GROUPS, SEQUENCES, SHORTS, TOSSUPS } from "./bank.ts";
 import type { Format, PlayerView, QuestionAtom, QuestionBundle, RoomConfig } from "./protocol.ts";
 
+/** Injected by the server; browser code must never import a repository pack. */
+export type RepositoryQuestionLoader = (
+  format: "tossup" | "snapper",
+  config: RoomConfig,
+  usedIds: readonly string[],
+  count: number,
+  random: () => number,
+) => Promise<QuestionAtom[]>;
+
 /** Content identity ignores provider IDs, punctuation and harmless spacing. */
 export function contentId(text: string): string {
   const value = text
@@ -257,6 +266,8 @@ async function external(
   random: () => number,
   needed: number,
 ): Promise<QuestionAtom[]> {
+  // A provider's guessed rating must never substitute for explicitly unrated content.
+  if (config.difficulty === "unrated") return [];
   if (format === "tossup") {
     const categories = config.categories.filter((c) => qbCategories[c]);
     if (!categories.length) return [];
@@ -313,6 +324,7 @@ export async function selectBundle(
   players: PlayerView[],
   fetcher: typeof fetch = fetch,
   random: () => number = Math.random,
+  repository?: RepositoryQuestionLoader,
 ): Promise<{ bundle: QuestionBundle | null; message?: string }> {
   const active = players.filter((p) => p.connected && p.role === "player");
   if (!active.length)
@@ -325,32 +337,69 @@ export async function selectBundle(
     random,
   );
   const used = new Set(usedIds);
+  const unique = (questions: QuestionAtom[], seen: Set<string>) => [
+    ...new Map(
+      questions
+        .map(identified)
+        .filter((q) => eligible(q, config, seen))
+        .map((q) => [q.id, q]),
+    ).values(),
+  ];
+  const localAtoms = async (format: Format, count: number, extraUsed: string[] = []) => {
+    const seen = new Set([...usedIds, ...extraUsed]);
+    let questions: QuestionAtom[] = [];
+    if (repository) {
+      try {
+        questions = unique(
+          await repository(
+            format === "tossup" ? "tossup" : "snapper",
+            config,
+            [...seen],
+            count,
+            random,
+          ),
+          seen,
+        );
+      } catch {
+        // The original authored bank keeps local play usable if deploy assets are missing.
+      }
+    }
+    return unique(
+      [...questions, ...shuffled(format === "tossup" ? TOSSUPS : SHORTS, random)],
+      seen,
+    ).slice(0, count);
+  };
+  const block = (format: Format, atoms: QuestionAtom[]): QuestionBundle => ({
+    id: `${format}-${atoms[0]!.id}`,
+    format,
+    title:
+      format === "assigned"
+        ? "Your turn"
+        : format === "shootout"
+          ? "Shootout"
+          : format === "tossup"
+            ? "Long tossup"
+            : "Quick snapper",
+    atoms,
+  });
   let fallback = false;
   for (const format of formats) {
-    const local = bundledOptions(format, config, usedIds, players, random);
+    const count = bundleSize(format, config, players);
     if (config.source === "mixed") {
       try {
-        const live = (
-          await external(format, config, fetcher, random, bundleSize(format, config, players))
-        ).filter((q) => eligible(q, config, used));
+        const live = unique(await external(format, config, fetcher, random, count), used);
         if (live.length && ["assigned", "shootout"].includes(format)) {
-          const count = bundleSize(format, config, players);
           const pool = [
-            ...new Map(
-              [...live, ...SHORTS.map(identified).filter((q) => eligible(q, config, used))].map(
-                (q) => [q.id, q],
-              ),
-            ).values(),
+            ...live,
+            ...(live.length < count
+              ? await localAtoms(
+                  format,
+                  count - live.length,
+                  live.map((q) => q.id),
+                )
+              : []),
           ];
-          if (pool.length >= count)
-            return {
-              bundle: {
-                id: `${format}-${pool[0]!.id}`,
-                format,
-                title: format === "assigned" ? "Your turn" : "Shootout",
-                atoms: pool.slice(0, count),
-              },
-            };
+          if (pool.length >= count) return { bundle: block(format, pool.slice(0, count)) };
         } else if (live.length)
           return {
             bundle: one(
@@ -363,6 +412,13 @@ export async function selectBundle(
         fallback = true;
       }
     }
+    const loaded = ["tossup", "snapper", "assigned", "shootout"].includes(format)
+      ? await localAtoms(format, count)
+      : [];
+    const local =
+      loaded.length && loaded.length >= count
+        ? [block(format, loaded)]
+        : bundledOptions(format, config, usedIds, players, random);
     if (local.length)
       return {
         bundle: local[randomIndex(local.length, random)]!,

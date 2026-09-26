@@ -492,6 +492,17 @@ test("moderation and owner permissions are distinct; malformed payloads are reje
   assert.equal(publicView(s, "c", 0).canModerate, true);
 });
 
+test("removed players retain history but are visibly removed and cannot reconnect", () => {
+  let s = answer(start("snapper"), "b");
+  s = act(s, "a", { type: "kick", playerId: "b" });
+  const removed = publicView(s, "a", 0).players.find((p) => p.id === "b")!;
+  assert.equal(removed.removed, true);
+  assert.equal(removed.connected, false);
+  assert.equal(removed.score, 10);
+  assert.equal(setConnected(s, "b", true, 1), s);
+  assert.ok(transition(s, "a", { type: "kick", playerId: "b" }, 1).error);
+});
+
 test("idle pause is explicit and requires a moderator to resume", () => {
   let s = initial();
   s = tick(s, 600_000);

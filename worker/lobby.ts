@@ -26,6 +26,7 @@ import {
 } from "../src/snapper/protocol";
 import type { Env } from "./index";
 import type { GuestToken } from "./security";
+import { QuestionPacks } from "./question-packs";
 
 const PENDING_MS = 5 * 60_000;
 const STALE_MS = 90_000;
@@ -85,9 +86,11 @@ export class Lobby extends DurableObject<Env> {
   private readTimer: ReturnType<typeof setTimeout> | null = null;
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null;
   private lastReading = "";
+  private questionPacks: QuestionPacks;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.questionPacks = new QuestionPacks(env.ASSETS);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     ctx.blockConcurrencyWhile(async () => {
       const savedConfig = await ctx.storage.get<RoomConfig>("config");
@@ -252,6 +255,9 @@ export class Lobby extends DurableObject<Env> {
         { ...this.record.game.config, formats },
         this.record.game.usedIds,
         this.record.game.players,
+        fetch,
+        Math.random,
+        this.questionPacks.select,
       );
       if (this.record?.game.id !== sid) return changed;
       if (result.bundle) {

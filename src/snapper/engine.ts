@@ -889,6 +889,8 @@ export function transition(
     case "kick": {
       const target = state.players.find((value) => value.id === action.playerId);
       if (!target || target.owner) return error(current, "The owner cannot be removed.");
+      if (state.removedIds.includes(target.id))
+        return error(current, "That player has already been removed.");
       target.connected = false;
       target.moderator = false;
       state.removedIds.push(target.id);
@@ -1025,7 +1027,10 @@ export function publicView(state: Session, selfId: string, now: number): Session
     pendingConfig: clone(state.pendingConfig),
     phase: state.phase,
     pausedReasons: state.pauses.map((reason) => pauseLabels[reason]),
-    players: clone(state.players),
+    players: state.players.map((player) => ({
+      ...player,
+      removed: state.removedIds.includes(player.id),
+    })),
     teamScores: clone(state.teamScores),
     block: b
       ? {

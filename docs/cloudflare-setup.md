@@ -35,6 +35,14 @@ The expected one-hour weekly game should fit these allowances. That is a plannin
 estimate, not a production measurement. Other apps in the account share limits.
 Review usage after the first game; if a limit is exhausted, wait for its reset.
 
+The repository question bank uses private static-asset shards, with no extra
+storage service or subscription. The Worker runs first for every request to
+block direct downloads of answer keys; public asset requests therefore also
+consume Worker request quota. Free-plan quota exhaustion returns an error and
+does not bypass this protection. The generated pack uses 650 shards plus 73
+index/manifest files, below the 20,000-file Free allowance. Source archives are
+not deployed. [Static assets limits](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/).
+
 Automatic builds also have a Free allowance of **3,000 build minutes per month**,
 with one build at a time and a 20-minute timeout per build. Keep Workers Free;
 do not enable paid builds. [Build limits](https://developers.cloudflare.com/workers/ci-cd/builds/limits-and-pricing/).

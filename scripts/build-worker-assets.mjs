@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { renderInstallPageHtml, renderWebManifest } from "./grok-pwa-shared.mjs";
+import { copyQuestionPacks } from "./prepare-question-assets.mjs";
 const directory = new URL("../dist/snapper/__grok/", import.meta.url);
 await mkdir(directory, { recursive: true });
 const manifest = JSON.parse(renderWebManifest("snapper.workers.dev"));
@@ -15,3 +16,4 @@ await writeFile(
   new URL("install.html", directory),
   renderInstallPageHtml(template.replaceAll("{{APP_NAME}}", "Snapper"), { url: "/" }),
 );
+await copyQuestionPacks(new URL("../dist/snapper/", import.meta.url));

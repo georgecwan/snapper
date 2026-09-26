@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import {
   ArrowRight,
   Clock3,
@@ -51,28 +59,56 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  initialFocus,
+  returnFocus,
+  descriptionId,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  initialFocus?: RefObject<HTMLElement | null>;
+  returnFocus?: HTMLElement | null;
+  descriptionId?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const backdropPointer = useRef(false);
+  const outsideDialog = (node: HTMLDialogElement, x: number, y: number) => {
+    const bounds = node.getBoundingClientRect();
+    return x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom;
+  };
   useEffect(() => {
     const node = dialog.current;
     node?.showModal();
+    initialFocus?.current?.focus({ preventScroll: true });
     return () => {
       node?.close();
+      if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
     };
-  }, []);
+  }, [initialFocus, returnFocus]);
   return (
     <dialog
       ref={dialog}
       aria-label={title}
+      aria-describedby={descriptionId}
       className={`snap-modal ${wide ? "modal-wide" : ""}`}
-      onCancel={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onPointerDown={(event) => {
+        backdropPointer.current =
+          event.target === event.currentTarget &&
+          outsideDialog(event.currentTarget, event.clientX, event.clientY);
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (
+          backdropPointer.current &&
+          event.target === event.currentTarget &&
+          outsideDialog(event.currentTarget, event.clientX, event.clientY)
+        )
+          onClose();
+        backdropPointer.current = false;
       }}
     >
       <div className="modal-head">
@@ -169,8 +205,12 @@ export function SnapperApp() {
   const [confirmation, setConfirmation] = useState<{
     title: string;
     text: string;
-    action: () => void;
+    action: () => boolean | void;
+    label: string;
+    returnFocus: HTMLElement | null;
   } | null>(null);
+  const cancelConfirmation = useRef<HTMLButtonElement>(null);
+  const confirmationDescription = useId();
   const self = session.view?.players.find((player) => player.id === session.view?.selfId);
   const observed = useRef<{
     questionId: string;
@@ -193,7 +233,15 @@ export function SnapperApp() {
       attemptIds: new Set(state.attempts.map((item) => item.id)),
     };
   }, [session.view, playSound]);
-  const confirm: Confirm = (title, text, action) => setConfirmation({ title, text, action });
+  const confirm: Confirm = (title, text, action, label = "Confirm") => {
+    const active = document.activeElement;
+    const returnFocus =
+      active instanceof HTMLElement
+        ? (active.closest("details[data-action-menu]")?.querySelector("summary") ?? active)
+        : null;
+    session.clearError();
+    setConfirmation({ title, text, action, label, returnFocus });
+  };
   const config = self?.owner
     ? (session.view?.pendingConfig ?? session.view?.config ?? session.status?.config)
     : (session.view?.config ?? session.status?.config);
@@ -318,20 +366,32 @@ export function SnapperApp() {
         </Modal>
       )}
       {confirmation && (
-        <Modal title={confirmation.title} onClose={() => setConfirmation(null)}>
-          <p className="panel-intro">{confirmation.text}</p>
+        <Modal
+          title={confirmation.title}
+          descriptionId={confirmationDescription}
+          initialFocus={cancelConfirmation}
+          returnFocus={confirmation.returnFocus}
+          onClose={() => setConfirmation(null)}
+        >
+          <p className="panel-intro" id={confirmationDescription}>
+            {confirmation.text}
+          </p>
+          {session.error && <p role="alert">{session.error}</p>}
           <div className="confirm-actions">
-            <button className="button secondary" onClick={() => setConfirmation(null)}>
+            <button
+              ref={cancelConfirmation}
+              className="button secondary"
+              onClick={() => setConfirmation(null)}
+            >
               Cancel
             </button>
             <button
               className="button primary"
               onClick={() => {
-                confirmation.action();
-                setConfirmation(null);
+                if (confirmation.action() !== false) setConfirmation(null);
               }}
             >
-              Confirm <ArrowRight size={17} />
+              {confirmation.label} <ArrowRight size={17} />
             </button>
           </div>
         </Modal>

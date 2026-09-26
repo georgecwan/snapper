@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
+import { prepareDevAssets } from "./prepare-question-assets.mjs";
 const bin = (name) => new URL(`../node_modules/.bin/${name}`, import.meta.url).pathname;
 const children = [];
+const assets = await prepareDevAssets();
 let stopping = false;
 function stop(code = 0) {
   if (stopping) return;
@@ -16,7 +18,7 @@ const worker = spawn(
     "--env",
     "local",
     "--assets",
-    "public",
+    assets,
     "--ip",
     "127.0.0.1",
     "--port",

@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { prepareDevAssets } from "./prepare-question-assets.mjs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const origin = "http://127.0.0.1:8788";
 try {
@@ -13,6 +14,7 @@ try {
 }
 await mkdir(join(root, ".wrangler/logs"), { recursive: true });
 const storage = await mkdtemp(join(tmpdir(), "snapper-integration-"));
+const assets = await prepareDevAssets("test-assets");
 const service = spawn(
   process.execPath,
   [
@@ -25,7 +27,7 @@ const service = spawn(
     "--port",
     "8788",
     "--assets",
-    "public",
+    assets,
     "--var",
     `APP_ORIGIN:${origin}`,
     "--persist-to",

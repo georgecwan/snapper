@@ -15,10 +15,14 @@ reasoning; it is not a description of the active runtime.
 - `src/snapper/judge.ts`: authored aliases, explicit clarifications and conservative
   typo tolerance. Ordered answers require every item in order.
 - `src/snapper/catalog.ts`: filtered format selection, source adapters and
-  normalized-content identity. Live content is never committed to the repository.
+  normalized-content identity. Live fetches are session-only; explicit licensed
+  offline imports are maintained separately under `data/`.
 - `src/snapper/bank.ts`: original fallback questions plus the original 35 tossups
   in `src/game/questions.ts`. The old bank is now imported only into the Worker.
-- `worker/index.ts`: public HTTP boundary, GitHub OAuth and guest cookies.
+- `worker/question-packs.ts`: bounded private asset loader, category/rating filters,
+  unseen-ID sampling and validation. `data/questions/` has generated shards;
+  `data/sources/` has compressed licensed snapshots, never deployed.
+- `worker/index.ts`: public HTTP boundary, private asset guard, GitHub OAuth and guest cookies.
 - `worker/oauth.ts`: GitHub authorization/callback flow, with mocked-provider
   regressions covering success, identity mismatch, invalid state and outages.
 - `worker/lobby.ts`: the singleton `main-lobby` Durable Object, admission,
@@ -78,19 +82,34 @@ values on subsequent deployments; secrets are also retained.
 
 ## Question content
 
-The fallback pack contains 35 long tossups, 96 short atoms, 24 authored related
-four-part groups, eight sequences and eight four-clue questions. Short atoms are
-shared by standalone, Assigned, Shootout, Open and Team formats; the content
-identity prevents repeating them through a different format in the same session.
-All fallback content is initially rated medium. Narrow filters or larger blocks
-can exhaust the pack quickly; that pauses play instead of changing filters.
+The original reviewed fallback contains 35 long tossups, 96 short atoms, 24
+related four-part groups, eight sequences and eight four-clue questions. The
+large imported pack adds **77,947** unique playable atoms: 40,356 QANTA tossups,
+33,892 OpenTriviaQA short questions and 3,699 OpenTDB short questions. Combined
+with the originals there are 78,094 atoms; group reuse is not counted twice.
 
-Live tossups use QB Reader. Its complex answerlines are rejected unless this
-adapter can represent them safely. Live short questions use Open Trivia DB;
-only suitable self-contained multiple-choice prompts are adapted to typed
-answers. Choice-dependent/negative prompts are discarded. Source attribution is
-shown on reveal. Open Trivia DB adaptations retain CC BY-SA attribution.
-Timeouts, failures and absent format coverage use the original fallback pack.
+Read [the data guide](../data/README.md) for licenses, exact pinned snapshots,
+quality limits, source difficulty mapping and offline rebuild commands. All
+imports retain CC BY-SA 4.0 attribution. They have automated structural screening
+and sampled review, not individual fact-checking. Unknown difficulty stays
+Unrated; the initial medium and previously saved filters remain unchanged.
+
+`npm run questions:import` regenerates shards offline; `npm run questions:check`
+checks every record and index. Builds copy generated shards into the private
+`/_question-packs` asset prefix without bundling them into client JavaScript or
+Worker code. The Durable Object loads only selected indexes/shards, with bounded
+caches. `run_worker_first: true` and the Worker guard block every public download
+of raw packs before auth or SPA routing. The dev server also blocks filesystem
+access. Do not add public asset redirects to the private prefix. The compressed
+source archives are kept in Git but are never deployed.
+
+Live tossups still use QB Reader; live short questions use OpenTDB. Unsupported
+answer rules and choice-dependent prompts are rejected. Live failures or missing
+format coverage use eligible repository content, with the original pack retained
+if generated assets cannot be loaded. No-repeat identity applies across live,
+imported, standalone and grouped content. Exhaustion pauses rather than changing
+saved filters. Imported shorts also feed Assigned and Shootout; authored grouped,
+sequence and four-clue formats retain their existing content.
 
 Adding content: author QuestionAtoms with stable text, accurate category and
 language, a reviewed canonical answer, useful explicit aliases, and provenance.
@@ -142,6 +161,29 @@ Production OAuth, geographic latency and real Free-plan usage cannot be verified
 by the local emulator. No production deployment has been performed yet.
 
 ## Verification log
+
+Question-bank and lobby-controls update, verified locally on 2026-09-26:
+
+- `npm test`: **90 passing tests**; frontend/Worker typechecking and scoped lint
+  pass. The offline importer and `questions:check` validate all 77,947 additions,
+  72 indexes and 650 shards, including canonical judging and provenance.
+- `npm run test:integration`: **3 passing tests** against the local Worker,
+  including the 32-participant scenario, private-asset HTTP denial and removal
+  permissions, clean WebSocket closure, revoked-cookie rejection and immediate
+  reuse of the freed seat. Test socket teardown has a bounded timeout.
+- Production build and Worker packaging dry run pass. The question JSON remains
+  outside the Worker bundle (898.16 KiB uncompressed / 154.89 KiB gzip) and client
+  assets. A real-corpus loader probe successfully reads all 72 groups.
+- Final desktop/mobile development and built smoke checks show visible content,
+  no overflow or console errors, no brand/auth warnings and matching verdicts.
+  Screenshots and JSON are in ignored `screenshots/snapper-bank-dev*` and
+  `screenshots/snapper-bank-built*`; both viewport images were visually reviewed.
+- Interactive browser checks verify outside-click/Escape menu dismissal, P/N
+  moderator shortcuts, top-positioned controls and the named removal dialog.
+  Cancel starts focused and returns to the participant menu trigger. Confirmed
+  removal disconnects the guest, marks the retained score row **Removed**, and
+  hides its management menu. The final built-preview test session was cleared
+  through last-player disconnection; saved gameplay settings were preserved.
 
 Verified locally on 2026-09-25/26:
 

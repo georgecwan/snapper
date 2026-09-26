@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Eye, MessageCircle, MoreHorizontal, Send, Trophy } from "lucide-react";
 import type { GameAction, PlayerView, SessionView } from "@/snapper/protocol";
 import type { Confirm } from "./game";
+import { Menu } from "./menu";
 
 type SendAction = (action: GameAction) => boolean;
 
@@ -59,37 +60,35 @@ function ParticipantMenu({
   send: SendAction;
   confirm: Confirm;
 }) {
-  if (!state.canModerate || player.id === self?.id || player.owner) return null;
+  if (!state.canModerate || player.id === self?.id || player.owner || player.removed) return null;
   return (
-    <details className="player-menu">
-      <summary aria-label={`Manage ${player.name}`}>
-        <MoreHorizontal size={18} />
-      </summary>
-      <div>
-        {self?.owner && player.role === "player" && player.connected && (
-          <button
-            onClick={() =>
-              send({ type: "promote", playerId: player.id, moderator: !player.moderator })
-            }
-          >
-            {player.moderator ? "Remove moderator" : "Make moderator"}
-          </button>
-        )}
+    <Menu
+      className="player-menu"
+      label={`Manage ${player.name}`}
+      trigger={<MoreHorizontal size={18} />}
+    >
+      {self?.owner && player.role === "player" && player.connected && (
         <button
           onClick={() =>
-            confirm(
-              `Remove ${player.name}?`,
-              "They will be removed from this session. Their score and current-question history remain part of the game.",
-              () => {
-                send({ type: "kick", playerId: player.id });
-              },
-            )
+            send({ type: "promote", playerId: player.id, moderator: !player.moderator })
           }
         >
-          Remove from session
+          {player.moderator ? "Remove moderator" : "Make moderator"}
         </button>
-      </div>
-    </details>
+      )}
+      <button
+        onClick={() =>
+          confirm(
+            `Remove ${player.name}?`,
+            `${player.name} will leave this session and lose access to it. Their existing score and answers stay in the game history.`,
+            () => send({ type: "kick", playerId: player.id }),
+            "Remove",
+          )
+        }
+      >
+        Remove from session
+      </button>
+    </Menu>
   );
 }
 
@@ -111,7 +110,7 @@ export function Scoreboard({
     (player) => player.connected && player.role === "player",
   ).length;
   const spectators = state.players.filter(
-    (player) => player.role === "spectator" && player.connected,
+    (player) => player.role === "spectator" && player.connected && !player.removed,
   );
   return (
     <>
@@ -163,7 +162,13 @@ export function Scoreboard({
               </strong>
               <span>
                 {[
-                  !player.connected ? "Away" : player.role === "spectator" ? "Watching" : "",
+                  player.removed
+                    ? "Removed"
+                    : !player.connected
+                      ? "Away"
+                      : player.role === "spectator"
+                        ? "Watching"
+                        : "",
                   player.owner ? "Owner" : player.moderator ? "Moderator" : "",
                   player.team ? `Team ${player.team}` : "",
                   player.connected &&

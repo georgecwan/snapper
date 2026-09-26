@@ -3,7 +3,9 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
-  "engines": { "node": ">=22.18.0" },
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "overrides": {
     "nf3": "0.3.17"
   },
@@ -19,16 +21,19 @@
     "check:auth": "node scripts/check-auth-invariant.mjs",
     "test": "npm run test:snapper",
     "lint": "eslint .",
-    "lint:snapper": "eslint src/snapper src/components/snapper worker scripts/dev.mjs scripts/build-brand.mjs scripts/build-worker-assets.mjs scripts/snapper-preview.mjs scripts/test-integration.mjs vite.config.ts --max-warnings 0",
+    "lint:snapper": "eslint src/snapper src/components/snapper worker scripts/dev.mjs scripts/build-brand.mjs scripts/build-worker-assets.mjs scripts/snapper-preview.mjs scripts/test-integration.mjs vite.config.ts scripts/question-import.mjs scripts/question-import.test.mjs scripts/import-questions.mjs scripts/check-questions.mjs scripts/prepare-question-assets.mjs scripts/download-opentdb.mjs --max-warnings 0",
     "format": "prettier --write .",
     "build:legacy": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
-    "test:snapper": "node --experimental-strip-types --test src/snapper/*.test.ts worker/*.test.ts",
+    "test:snapper": "node --experimental-strip-types --test src/snapper/*.test.ts worker/*.test.ts scripts/question-import.test.mjs",
     "check:worker": "WRANGLER_LOG_PATH=.wrangler/logs WRANGLER_SEND_METRICS=false wrangler deploy --env '' --dry-run --outdir dist/worker",
     "deploy": "npm run build && wrangler deploy --env ''",
     "test:template": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts",
     "test:integration": "node scripts/test-integration.mjs",
     "check:browser": "node scripts/browser-smoke.mjs",
-    "build:brand": "node scripts/build-brand.mjs"
+    "build:brand": "node scripts/build-brand.mjs",
+    "questions:import": "node --experimental-strip-types scripts/import-questions.mjs",
+    "questions:check": "node --experimental-strip-types scripts/check-questions.mjs",
+    "questions:download:opentdb": "node scripts/download-opentdb.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",

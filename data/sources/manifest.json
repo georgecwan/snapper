@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "retrievedAt": "2026-09-26",
+  "openTriviaRevision": "dd31530bfbb19f9505b160b89c9df4b1127e3c70",
+  "files": [
+    {
+      "file": "qanta.train.2018.04.18.json.gz",
+      "sha256": "f196f0bd31fb6b39a323c01f22c2faa77abbe4858904c169d74163bdafdbf38d",
+      "uncompressedSha256": "6b1ffc2e437439044f0e0c3fe12e0c6f3ed7f55fd35f9958bb24d6bc33c1b439",
+      "upstream": "https://huggingface.co/datasets/TasnimKabir12/qanta/resolve/12d2ce9c99e55643c0116f4623d3ac72656f7f7d/qanta.train.2018.04.18.json",
+      "licenseEvidence": "https://pinafore.github.io/qanta-leaderboard/",
+      "license": "CC-BY-SA-4.0"
+    },
+    {
+      "file": "qanta.dev.2018.04.18.json.gz",
+      "sha256": "02a9e41663dc4c58dd96d6b12a580bafae1c466b35be8fbf1c61bed5f7632353",
+      "uncompressedSha256": "cef900bdf06a4b41a86a53f7ee619df2575e539340d59e6270bd0755e2c4ef8a",
+      "upstream": "https://huggingface.co/datasets/TasnimKabir12/qanta/resolve/12d2ce9c99e55643c0116f4623d3ac72656f7f7d/qanta.dev.2018.04.18.json",
+      "licenseEvidence": "https://pinafore.github.io/qanta-leaderboard/",
+      "license": "CC-BY-SA-4.0"
+    },
+    {
+      "file": "qanta.test.2018.04.18.json.gz",
+      "sha256": "348982d900b4b02a2f69b04f8f2602aba074e684b2457bbaaa1e53afcda40675",
+      "uncompressedSha256": "bc04500775e59e0806d734618f65e2dd4f7b7137ab3072d234f035096eaaec08",
+      "upstream": "https://huggingface.co/datasets/TasnimKabir12/qanta/resolve/12d2ce9c99e55643c0116f4623d3ac72656f7f7d/qanta.test.2018.04.18.json",
+      "licenseEvidence": "https://pinafore.github.io/qanta-leaderboard/",
+      "license": "CC-BY-SA-4.0"
+    },
+    {
+      "file": "opentriviaqa.tar.gz",
+      "sha256": "4bcdd7c04f9073a2fc61acc704884b5fde55bcbbe9194600ba42efacccefeb23",
+      "upstream": "https://codeload.github.com/uberspot/OpenTriviaQA/tar.gz/dd31530bfbb19f9505b160b89c9df4b1127e3c70",
+      "licenseEvidence": "https://github.com/uberspot/OpenTriviaQA/blob/dd31530bfbb19f9505b160b89c9df4b1127e3c70/README.md",
+      "license": "CC-BY-SA-4.0"
+    },
+    {
+      "file": "opentdb.json.gz",
+      "sha256": "17606ec997deac8d2b4ce0e8f34d39d49d7e911a7b3e9bec166525d2bf553e43",
+      "uncompressedSha256": "3556685bf41e8355af38a9b7c76b0b73f732a2e4d57f22bcff30d7969faf3deb",
+      "upstream": "https://opentdb.com/api.php",
+      "licenseEvidence": "https://opentdb.com/api_config.php",
+      "license": "CC-BY-SA-4.0",
+      "retrievedAt": "2026-09-26T06:47:11.377Z"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundledOptions, contentId, parseQB, parseTrivia, selectBundle } from "./catalog.ts";
-import { DEFAULT_CONFIG, FORMATS, type PlayerView } from "./protocol.ts";
+import { DEFAULT_CONFIG, FORMATS, type PlayerView, type QuestionAtom } from "./protocol.ts";
 const players: PlayerView[] = Array.from({ length: 16 }, (_, i) => ({
   id: String(i),
   name: `Player ${i}`,
@@ -173,5 +173,141 @@ test("live trivia requests the block size instead of exhausting a pool smaller t
     assert.equal(result.bundle?.format, format);
     assert.equal(result.bundle?.atoms.length, available);
     assert.ok(result.bundle?.atoms.every((q) => q.category === "Math" && q.difficulty === "hard"));
+  }
+});
+
+const packedQuestion = (n: number, changes: Partial<QuestionAtom> = {}): QuestionAtom => {
+  const text = `Name the hard science example associated with catalogue entry ${n}.`;
+  return {
+    id: contentId(text),
+    text,
+    category: "Science",
+    language: "en",
+    difficulty: "hard",
+    answer: { canonical: `Example ${n}`, aliases: [] },
+    provenance: { label: "Repository fixture", license: "CC0" },
+    ...changes,
+  };
+};
+
+test("repository packs supply tossups and complete 16/32-question short formats", async () => {
+  for (const [format, expectedFormat, count] of [
+    ["tossup", "tossup", 1],
+    ["snapper", "snapper", 1],
+    ["assigned", "snapper", 16],
+    ["shootout", "snapper", 32],
+  ] as const) {
+    let calls = 0;
+    const result = await selectBundle(
+      { ...config, formats: [format], difficulty: "hard", categories: ["Science"] },
+      [],
+      players,
+      fetch,
+      () => 0,
+      async (kind, requestedConfig, used, needed) => {
+        calls++;
+        assert.equal(kind, expectedFormat);
+        assert.equal(needed, count);
+        assert.equal(requestedConfig.difficulty, "hard");
+        assert.deepEqual(used, []);
+        return Array.from({ length: needed }, (_, n) => packedQuestion(n));
+      },
+    );
+    assert.equal(calls, 1);
+    assert.equal(result.bundle?.format, format);
+    assert.equal(result.bundle?.atoms.length, count);
+    assert.equal(new Set(result.bundle?.atoms.map((q) => q.id)).size, count);
+  }
+});
+
+test("repository results cannot bypass deduplication, filters, or complete-block demand", async () => {
+  const used = packedQuestion(1);
+  const wrongCategory = packedQuestion(2, { category: "Math" });
+  const wrongRating = packedQuestion(3, { difficulty: "easy" });
+  const candidate = packedQuestion(4);
+  const selected = await selectBundle(
+    { ...config, formats: ["snapper"], difficulty: "hard", categories: ["Science"] },
+    [used.id],
+    players,
+    fetch,
+    () => 0,
+    async () => [
+      used,
+      wrongCategory,
+      wrongRating,
+      candidate,
+      { ...candidate, id: "provider-alias" },
+    ],
+  );
+  assert.deepEqual(selected.bundle?.atoms, [candidate]);
+  const incomplete = await selectBundle(
+    { ...config, formats: ["assigned"], difficulty: "hard", categories: ["Science"] },
+    [],
+    players,
+    fetch,
+    () => 0,
+    async () => [candidate, candidate],
+  );
+  assert.equal(incomplete.bundle, null, "a partial assignment must not begin");
+});
+
+test("partial repository blocks can use distinct compatible original questions", async () => {
+  const one = packedQuestion(1, { difficulty: "medium" });
+  const result = await selectBundle(
+    { ...config, formats: ["assigned"] },
+    [],
+    players,
+    fetch,
+    () => 0,
+    async () => [one],
+  );
+  assert.equal(result.bundle?.atoms.length, 16);
+  assert.equal(result.bundle?.atoms[0]?.id, one.id);
+  assert.equal(new Set(result.bundle?.atoms.map((q) => q.id)).size, 16);
+});
+
+test("unrated repository selection does not send unsupported filters to live providers", async () => {
+  const question = packedQuestion(1, { difficulty: "unrated" });
+  const result = await selectBundle(
+    { ...config, source: "mixed", formats: ["tossup"], difficulty: "unrated" },
+    [],
+    players,
+    async () => {
+      throw new Error("External provider must not be called");
+    },
+    () => 0,
+    async () => [question],
+  );
+  assert.deepEqual(result.bundle?.atoms, [question]);
+  assert.equal(result.message, undefined);
+});
+
+test("missing repository assets retain suitable original content and all authored special formats", async () => {
+  const failed = await selectBundle(
+    { ...config, formats: ["tossup"] },
+    [],
+    players,
+    fetch,
+    () => 0,
+    async () => {
+      throw new Error("missing asset");
+    },
+  );
+  assert.equal(failed.bundle?.format, "tossup");
+  for (const format of ["open", "team", "sequence", "clues"] as const) {
+    let calls = 0;
+    const selected = await selectBundle(
+      { ...config, formats: [format] },
+      [],
+      players,
+      fetch,
+      () => 0,
+      async () => {
+        calls++;
+        return [];
+      },
+    );
+    assert.equal(selected.bundle?.format, format);
+    assert.equal(calls, 0, `${format} keeps its authored structure`);
   }
 });

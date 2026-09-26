@@ -12,3 +12,4 @@ artifacts
 .node_modules.lock
 .wrangler
 .dev.vars*
+.question-cache/

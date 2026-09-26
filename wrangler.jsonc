@@ -9,7 +9,9 @@
     "directory": "./dist/snapper",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/snapper/*", "/"],
+    // Private question shards share ASSETS; every external request must pass
+    // the Worker's deny rule, including encoded paths and browser navigation.
+    "run_worker_first": true,
   },
   "durable_objects": {
     "bindings": [{ "name": "LOBBY", "class_name": "Lobby" }],

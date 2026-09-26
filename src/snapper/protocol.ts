@@ -31,6 +31,12 @@ export const CATEGORIES = [
   "Geography",
   "Canada",
   "Sport",
+  "General",
+  "Entertainment",
+  "Religion",
+  "Mythology",
+  "Philosophy",
+  "Social Science",
 ] as const;
 export const configSchema = z
   .object({
@@ -40,8 +46,8 @@ export const configSchema = z
       .min(1)
       .max(8)
       .refine((v) => new Set(v).size === v.length),
-    categories: z.array(z.enum(CATEGORIES)).min(1).max(8),
-    difficulty: z.enum(["easy", "medium", "hard", "any"]),
+    categories: z.array(z.enum(CATEGORIES)).min(1).max(CATEGORIES.length),
+    difficulty: z.enum(["easy", "medium", "hard", "unrated", "any"]),
     language: z.literal("en"),
     source: z.enum(["mixed", "bundled"]),
     wpm: z.number().int().min(80).max(500),
@@ -72,7 +78,7 @@ export type RoomConfig = z.infer<typeof configSchema>;
 export const DEFAULT_CONFIG: RoomConfig = {
   mode: "ffa",
   formats: [...FORMATS],
-  categories: [...CATEGORIES],
+  categories: ["Science", "Math", "History", "Literature", "Arts", "Geography", "Canada", "Sport"],
   difficulty: "medium",
   language: "en",
   source: "mixed",
@@ -106,7 +112,7 @@ export interface QuestionAtom {
   text: string;
   answer: AnswerSpec;
   category: string;
-  difficulty: "easy" | "medium" | "hard";
+  difficulty: "easy" | "medium" | "hard" | "unrated";
   language: "en";
   provenance: Provenance;
   /** Visible character offset at which the power window ends. */
@@ -128,6 +134,8 @@ export interface PlayerView {
   connected: boolean;
   owner: boolean;
   moderator: boolean;
+  /** Retained score/history row after session access has been revoked. */
+  removed?: boolean;
 }
 export interface AttemptView {
   id: string;

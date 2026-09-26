@@ -159,6 +159,7 @@ export function ConfigPanel({ config, editable, onSave, pending }: Props) {
                 <option value="easy">Easy</option>
                 <option value="medium">Medium</option>
                 <option value="hard">Hard</option>
+                <option value="unrated">Unrated</option>
                 <option value="any">Any difficulty</option>
               </select>
               <ChevronDown size={16} />

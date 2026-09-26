@@ -176,6 +176,21 @@ export default defineConfig(({ command, isPreview, mode }) => ({
     host: "0.0.0.0",
     port: 8080,
     strictPort: true,
+    fs: {
+      deny: [
+        ".env",
+        ".env.*",
+        "*.{crt,pem}",
+        "**/.git/**",
+        "**/data/**",
+        "**/.question-cache/**",
+        "**/.wrangler/**",
+        join(process.cwd(), "dist/**"),
+        "**/worker/**",
+        "**/src/snapper/bank.ts",
+        "**/src/game/questions.ts",
+      ],
+    },
     proxy: { "/api/snapper": { target: "http://127.0.0.1:8787", ws: true } },
   },
   preview: {

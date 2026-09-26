@@ -29,9 +29,16 @@ import {
   type SessionView,
 } from "@/snapper/protocol";
 import type { SessionController } from "@/snapper/use-session";
+import { gameShortcut, moderationActions } from "@/snapper/shortcuts";
 import { Chat, Scoreboard, SeatButtons } from "./community";
+import { Menu } from "./menu";
 
-export type Confirm = (title: string, text: string, action: () => void) => void;
+export type Confirm = (
+  title: string,
+  text: string,
+  action: () => boolean | void,
+  label?: string,
+) => void;
 
 export function Game({
   session,
@@ -112,28 +119,26 @@ export function Game({
   }, [session.error]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        event.code !== "Space" ||
-        event.repeat ||
-        event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey ||
-        document.querySelector("dialog[open]") ||
+      const target = event.target instanceof Element ? event.target : null;
+      const blocked = Boolean(
+        document.querySelector("dialog[open], details[data-action-menu][open]") ||
         target?.closest(
-          "input,textarea,select,button,a,summary,[role='button'],[contenteditable='true']",
-        )
-      )
-        return;
-      if (canBuzz) {
-        event.preventDefault();
-        buzz();
-      }
+          "input,textarea,select,button,a,summary,[role='button'],[role='textbox'],[contenteditable]:not([contenteditable='false'])",
+        ),
+      );
+      const action = gameShortcut(
+        event,
+        { ...moderationActions(state, connected), canBuzz },
+        blocked,
+      );
+      if (!action) return;
+      event.preventDefault();
+      if (action === "buzz") buzz();
+      else send({ type: action });
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [buzz, canBuzz]);
+  }, [buzz, canBuzz, connected, send, state]);
   const players = state.players.filter((player) => player.role === "player" && player.connected);
   const spectators = state.players.filter(
     (player) => player.role === "spectator" && player.connected,
@@ -188,6 +193,9 @@ export function Game({
           </span>
         </div>
       </div>
+      {state.canModerate && (
+        <Moderation state={state} self={self} send={send} connected={connected} confirm={confirm} />
+      )}
       {state.pendingConfig && (
         <div className="pending-config">
           <Settings2 size={15} /> New lobby rules are ready for the next block.
@@ -482,15 +490,6 @@ export function Game({
             </div>
           )}
           {state.attempts.length > 0 && <Attempts state={state} send={send} confirm={confirm} />}
-          {state.canModerate && (
-            <Moderation
-              state={state}
-              self={self}
-              send={send}
-              connected={connected}
-              confirm={confirm}
-            />
-          )}
         </section>
         <aside className="side-column">
           <section
@@ -595,28 +594,25 @@ function Attempts({
               {attempt.points}
             </strong>
             {state.canModerate && (
-              <details className="correction-menu">
-                <summary>Correct</summary>
-                <div>
-                  {(["accept", "reject"] as const).map((verdict) => (
-                    <button
-                      key={verdict}
-                      disabled={attempt.verdict === verdict}
-                      onClick={() =>
-                        confirm(
-                          `Correct ${attempt.name}'s answer?`,
-                          `Mark “${attempt.answer || "No answer"}” as ${verdict === "accept" ? "correct" : "incorrect"}. Scores and this question's eligibility will be recalculated.`,
-                          () => {
-                            send({ type: "correct", attemptId: attempt.id, verdict });
-                          },
-                        )
-                      }
-                    >
-                      {verdict === "accept" ? "Mark correct" : "Mark incorrect"}
-                    </button>
-                  ))}
-                </div>
-              </details>
+              <Menu className="correction-menu" trigger="Correct">
+                {(["accept", "reject"] as const).map((verdict) => (
+                  <button
+                    key={verdict}
+                    disabled={attempt.verdict === verdict}
+                    onClick={() =>
+                      confirm(
+                        `Correct ${attempt.name}'s answer?`,
+                        `Mark “${attempt.answer || "No answer"}” as ${verdict === "accept" ? "correct" : "incorrect"}. Scores and this question's eligibility will be recalculated.`,
+                        () => {
+                          send({ type: "correct", attemptId: attempt.id, verdict });
+                        },
+                      )
+                    }
+                  >
+                    {verdict === "accept" ? "Mark correct" : "Mark incorrect"}
+                  </button>
+                ))}
+              </Menu>
             )}
           </li>
         ))}
@@ -638,6 +634,7 @@ function Moderation({
   connected: boolean;
   confirm: Confirm;
 }) {
+  const controls = moderationActions(state, connected);
   return (
     <section className="moderation-panel" aria-label="Moderator controls">
       <div className="moderation-label">
@@ -658,24 +655,25 @@ function Moderation({
           <>
             <button
               className="button secondary mini"
-              disabled={!connected || Boolean(state.challenge)}
-              onClick={() => send({ type: state.pausedReasons.length ? "resume" : "pause" })}
+              disabled={!controls.pause}
+              onClick={() => controls.pause && send({ type: controls.pause })}
+              title={`${state.pausedReasons.length ? "Resume" : "Pause"} (P)`}
+              aria-keyshortcuts="P"
             >
               {state.pausedReasons.length ? <Play size={15} /> : <Pause size={15} />}
               {state.pausedReasons.length ? "Resume" : "Pause"}
+              <kbd aria-hidden="true">P</kbd>
             </button>
             <button
               className="button secondary mini"
-              disabled={
-                !connected ||
-                Boolean(state.challenge) ||
-                state.phase !== "reveal" ||
-                state.pausedReasons.length > 0
-              }
+              disabled={!controls.next}
               onClick={() => send({ type: "next" })}
+              title="Next question (N)"
+              aria-keyshortcuts="N"
             >
               <ArrowRight size={15} />
               Next
+              <kbd aria-hidden="true">N</kbd>
             </button>
             <button
               className="button secondary mini"
@@ -710,44 +708,47 @@ function Moderation({
             </button>
           </>
         )}
-        <details className="more-controls">
-          <summary className="button quiet mini">
-            <MoreHorizontal size={18} /> More
-          </summary>
-          <div>
+        <Menu
+          className="more-controls"
+          triggerClassName="button quiet mini"
+          trigger={
+            <>
+              <MoreHorizontal size={18} /> More
+            </>
+          }
+        >
+          <button
+            onClick={() =>
+              confirm(
+                "Reset everyone's scores?",
+                "Set player and team scores back to zero. The questions already seen and the chat stay in this session.",
+                () => {
+                  send({ type: "reset-scores" });
+                },
+              )
+            }
+          >
+            <RotateCcw size={15} />
+            Reset all scores
+          </button>
+          {self?.owner && (
             <button
+              className="danger-text"
               onClick={() =>
                 confirm(
-                  "Reset everyone's scores?",
-                  "Set player and team scores back to zero. The questions already seen and the chat stay in this session.",
+                  "End this session?",
+                  "Close the lobby for everyone and clear this session's scores, chat and approvals. Your saved lobby settings stay ready for next time.",
                   () => {
-                    send({ type: "reset-scores" });
+                    send({ type: "close-session" });
                   },
                 )
               }
             >
-              <RotateCcw size={15} />
-              Reset all scores
+              <Flag size={15} />
+              End the session
             </button>
-            {self?.owner && (
-              <button
-                className="danger-text"
-                onClick={() =>
-                  confirm(
-                    "End this session?",
-                    "Close the lobby for everyone and clear this session's scores, chat and approvals. Your saved lobby settings stay ready for next time.",
-                    () => {
-                      send({ type: "close-session" });
-                    },
-                  )
-                }
-              >
-                <Flag size={15} />
-                End the session
-              </button>
-            )}
-          </div>
-        </details>
+          )}
+        </Menu>
       </div>
     </section>
   );

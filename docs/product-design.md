@@ -247,6 +247,12 @@ and corrections do not count as additional presented prompts.
 - Preserve source identity, author/packet information where supplied, rights
   notices and required attribution. An available API does not automatically
   authorize copying its whole corpus into the repository.
+- The owner requested as many useful local questions as possible. The repository
+  now includes licensed QANTA 2018, OpenTriviaQA and OpenTDB snapshots, with 77,947
+  filtered additions. See [question data](../data/README.md) for exact attribution,
+  conversion limits and counts. Imports are screened and sampled, not all
+  individually fact-checked. Unrated source questions stay explicitly Unrated;
+  existing saved/default filters are not silently expanded.
 
 ## Visual and interaction direction
 
@@ -269,6 +275,12 @@ and corrections do not count as additional presented prompts.
   solely through color. Respect reduced-motion preferences.
 - Clearly distinguish waiting for approval, connecting, reconnecting, paused,
   full, exhausted content and temporarily unavailable service.
+- Host/moderator controls belong at the top to minimize scrolling. Action menus
+  close on outside click and Escape. P pauses/resumes and N advances when the
+  corresponding moderator action is allowed; shortcuts never fire during typing.
+- Removing a player uses a named confirmation with explicit Cancel/Remove
+  actions and reliable keyboard focus. Removal remains session-only and follows
+  the existing owner/moderator permission rules.
 
 ## Architecture and implementation status
 
