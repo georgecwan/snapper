@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --color-bg: #101614;
+  --color-surface: #1a2420;
+  --color-surface-2: #24302b;
+  --color-fg: #f3efe4;
+  --color-muted: #a3aea6;
+  --color-line: #314039;
+  --color-paper: #f6f1e6;
+  --color-ink: #1c1915;
+  --color-ink-soft: #5c564c;
+  --color-brass: #e0a84a;
+  --color-brass-deep: #8a6420;
+  --color-good: #3f8f62;
+  --color-bad: #c45c4a;
+  --radius-card: 1rem;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: var(--color-brass);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+  }
+}
+
+.paper-card {
+  color-scheme: light;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  border-radius: var(--radius-card);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.28);
+}
+
+.paper-rule {
+  height: 0.45rem;
+  background: var(--color-brass);
+}
+
+.caret {
+  display: inline-block;
+  width: 0.55rem;
+  height: 1.05em;
+  margin-left: 0.12rem;
+  transform: translateY(0.12em);
+  background: var(--color-brass-deep);
+  animation: lectern-caret 1s steps(1) infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes lectern-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.score-pop {
+  animation: lectern-pop 280ms ease-out;
+}
+
+@keyframes lectern-pop {
+  from {
+    transform: translateY(0.2rem);
+  }
+}
+
+.buzz-dock {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  border-top: 1px solid var(--color-line);
+  backdrop-filter: blur(10px);
+}
+
+.buzz-btn {
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret,
+  .score-pop {
+    animation: none;
+  }
+}
