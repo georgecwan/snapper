@@ -806,3 +806,108 @@ test(
     );
   },
 );
+
+test(
+  "legacy FFA Shootout settings persist as independent nonrepeating Snappers",
+  { skip: !origin, timeout: 30_000 },
+  async (t) => {
+    assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname));
+    const owner = new Client();
+    const first = await owner.http("/status");
+    assert.equal(first.body.devAuth, true, "Only run against the local environment");
+    assert.equal((await owner.http("/dev-owner", {})).status, 200);
+    t.after(() => owner.close());
+
+    const open = async () => {
+      owner.state = null;
+      owner.messages = [];
+      assert.equal((await owner.http("/open", { name: "Migration owner" })).status, 200);
+      await owner.connect();
+    };
+    const close = async () => {
+      const before = owner.messages.length;
+      owner.send({ type: "close-session" });
+      await eventually(
+        () => owner.messages.slice(before).some((message) => message.type === "ended"),
+        "migration session closes",
+      );
+      owner.close();
+      assert.equal((await owner.http("/status")).body.active, false);
+    };
+    const ack = async (action) => {
+      const result = await owner.result(owner.send(action));
+      assert.equal(result.type, "ack", result.message);
+    };
+    if (first.body.active) {
+      await open();
+      await close();
+    }
+
+    const config = {
+      ...first.body.config,
+      mode: "ffa",
+      formats: ["shootout"],
+      categories: ["Science", "History", "Geography"],
+      difficulty: "any",
+      source: "bundled",
+      shortProgressive: false,
+      autoAdvance: false,
+      graceMs: 30_000,
+      answerMs: 8000,
+    };
+    assert.equal(
+      (await owner.http("/config", { config: { ...config, mode: "teams" } })).status,
+      200,
+    );
+    assert.deepEqual(
+      (await owner.http("/status")).body.config.formats,
+      ["shootout"],
+      "Team Shootout remains a saved selectable format",
+    );
+    assert.equal((await owner.http("/config", { config })).status, 200);
+    assert.deepEqual((await owner.http("/status")).body.config.formats, ["snapper"]);
+    await open();
+    const sessionId = owner.state.sessionId;
+    assert.deepEqual(owner.state.config.formats, ["snapper"]);
+    await ack({ type: "start" });
+
+    const seenText = new Set();
+    for (let round = 0; round < 4; round++) {
+      await eventually(() => owner.state.phase === "reading", "independent Snapper starts");
+      assert.equal(owner.state.block.format, "snapper");
+      assert.equal(owner.state.block.count, 1);
+      assert.equal(owner.state.block.index, 0);
+      assert.equal(owner.state.question.answer, null, "No answer key is sent before reveal");
+      const text = owner.state.question.text;
+      assert.ok(text.length > 0);
+      assert.ok(!seenText.has(text), "Each block selects a different underlying question");
+      seenText.add(text);
+      assert.equal(owner.state.canBuzz, true, "A previous winner remains eligible next block");
+      await ack({ type: "buzz" });
+      assert.equal(owner.state.answererId, owner.state.selfId);
+      await ack({ type: "answer", text: "deliberately incorrect migration test answer 847" });
+      assert.equal(owner.state.phase, "reveal");
+      const attempt = owner.state.attempts[0];
+      assert.equal(attempt.verdict, "reject");
+      // Award this attempt through the normal moderator API, without consulting
+      // a private answer key, to prove winners are not retired from the next block.
+      await ack({ type: "correct", attemptId: attempt.id, verdict: "accept" });
+      assert.equal(
+        owner.state.players.find((player) => player.id === owner.state.selfId).score,
+        (round + 1) * config.points.regular,
+      );
+      if (round < 3) await ack({ type: "next" });
+    }
+    await close();
+    assert.deepEqual((await owner.http("/status")).body.config.formats, ["snapper"]);
+    await open();
+    assert.notEqual(owner.state.sessionId, sessionId);
+    assert.equal(owner.state.config.mode, "ffa");
+    assert.deepEqual(owner.state.config.formats, ["snapper"]);
+    assert.equal(owner.state.players.find((player) => player.id === owner.state.selfId).score, 0);
+    await ack({ type: "start" });
+    assert.equal(owner.state.block.format, "snapper");
+    assert.equal(owner.state.block.count, 1);
+    await close();
+  },
+);

@@ -62,8 +62,10 @@ verification plan.
   chat, and accept updates only from the current connection in its valid answer
   window. Pause freezes a draft; submission, timeout, clarification, departure,
   removal, tab takeover and question end clear it. Never persist draft text.
-- All eight agreed text formats belong to the scope. Do not quietly reduce it
-  to tossups or silently change the equal-opportunity team rules.
+- All eight text formats remain supported across modes. Shootout is team-only;
+  FFA uses its short questions as ordinary Snappers, with no retirement or
+  Shootout block. Normalize old FFA Shootout settings to Snapper without giving
+  Snapper duplicate weight. Preserve the equal-opportunity team rules.
 - Free content retrieval must fall back to suitable reviewed repository packs.
   No repeated questions within a session; pause when all eligible content is
   exhausted. Keep source provenance and applicable attribution.

@@ -114,13 +114,26 @@ of raw packs before auth or SPA routing. The dev server also blocks filesystem
 access. Do not add public asset redirects to the private prefix. The compressed
 source archives are kept in Git but are never deployed.
 
+Repository selection draws from unseen content on each call, with no cached
+opening order or cross-session history. Lazy group weighting uses an acceptance
+step when an index reveals fewer unseen questions than its manifest count.
+Reservoir samples are shuffled before a group contributes only part of a block;
+taking an unshuffled prefix would favor early index entries. Index/shard reads
+and caches remain bounded; format choices stay independently random.
+
 Live tossups still use QB Reader; live short questions use OpenTDB. Unsupported
 answer rules and choice-dependent prompts are rejected. Live failures or missing
 format coverage use eligible repository content, with the original pack retained
 if generated assets cannot be loaded. No-repeat identity applies across live,
 imported, standalone and grouped content. Exhaustion pauses rather than changing
-saved filters. Imported shorts also feed Assigned and Shootout; authored grouped,
+saved filters. Imported shorts also feed Assigned and team Shootout; authored grouped,
 sequence and four-clue formats retain their existing content.
+
+Shootout is team-only. Configuration parsing maps older FFA Shootout selections
+to one Snapper entry; engine readiness and catalog selection also normalize
+recovered sessions. The settings panel disables Shootout in FFA. Its questions
+stay in the shared short-question pool and play with ordinary Snapper rules.
+Existing blocks retain their rules until the next block boundary.
 
 Adding content: author QuestionAtoms with stable text, accurate category and
 language, a reviewed canonical answer, useful explicit aliases, and provenance.
@@ -172,6 +185,23 @@ Production OAuth, geographic latency and real Free-plan usage cannot be verified
 by the local emulator. No production deployment has been performed yet.
 
 ## Verification log
+
+Random selection and team-only Shootout, verified locally on 2026-09-26:
+
+- `npm test`: **112 passing tests**. Deterministic distribution regressions
+  exercise fresh-lobby openings, every position in multi-question samples and
+  partially exhausted groups. Lazy asset reads and no-repeat filtering pass.
+- `npm run test:integration`: **5 passing tests**, including old FFA Shootout
+  settings migrating to saved Snappers, four distinct one-question blocks,
+  continued eligibility after scoring, and closing/reopening the lobby.
+  Team Shootout remains selectable; legacy active blocks finish normally.
+- Frontend/Worker typechecking, scoped lint, production build and Worker dry run
+  pass. Interactive desktop/mobile checks confirm Shootout is disabled in FFA,
+  available for teams, and switching back selects only one Snapper entry.
+  The test lobby was closed without saving its temporary UI edits.
+- Desktop/mobile development and built smoke checks match, with no overflow,
+  console errors or brand/auth warnings. Both viewport screenshots were reviewed
+  (`screenshots/snapper-random-ffa-dev*` and `snapper-random-ffa-built*`).
 
 Live answer drafts, verified locally on 2026-09-26:
 

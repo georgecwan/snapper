@@ -11,6 +11,14 @@ export const FORMATS = [
   "shootout",
 ] as const;
 export type Format = (typeof FORMATS)[number];
+/** Older FFA settings used Shootout; its short questions now play as ordinary Snappers. */
+export function normalizeFormats(mode: "ffa" | "teams", formats: readonly Format[]): Format[] {
+  return [
+    ...new Set(
+      formats.map((format) => (mode === "ffa" && format === "shootout" ? "snapper" : format)),
+    ),
+  ];
+}
 export const FORMAT_LABELS: Record<Format, string> = {
   tossup: "Tossup",
   snapper: "Snapper",
@@ -73,11 +81,12 @@ export const configSchema = z
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  .transform((config) => ({ ...config, formats: normalizeFormats(config.mode, config.formats) }));
 export type RoomConfig = z.infer<typeof configSchema>;
 export const DEFAULT_CONFIG: RoomConfig = {
   mode: "ffa",
-  formats: [...FORMATS],
+  formats: normalizeFormats("ffa", FORMATS),
   categories: ["Science", "Math", "History", "Literature", "Arts", "Geography", "Canada", "Sport"],
   difficulty: "medium",
   language: "en",

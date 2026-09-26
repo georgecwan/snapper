@@ -138,6 +138,10 @@ tossup or standalone Snapper can be a one-question block.
 - Choose enabled, currently playable formats **independently at random** at
   block boundaries. Consecutive repeats of a format are allowed; do not use a
   shuffled cycle instead.
+- Within a selected format and the saved filters, sample the eligible unseen
+  repository questions fairly, without preferring early entries or depleted
+  groups. A new lobby draws afresh; do not reuse a fixed opening sequence or
+  persist question history between lobbies.
 - Automatic/manual advancement and the delay are configurable.
 - Content topics, difficulty and available languages are configurable. Do not
   show working filters for content the system cannot actually supply.
@@ -207,11 +211,15 @@ Scores and timing are configurable by the owner.
 | Team scramble/bonuses | 10-point scramble, followed by three exclusive 10-point bonuses. First winning-team member to buzz gets its one attempt. No opposing steals. Team-dependent, so unavailable in FFA. |
 | Assigned | 10 points. Assigned player answers first; a wrong answer/timeout gives one designated opponent an attempt. In FFA, use the next player in the rotating order. |
 | Four-clue Who/What Am I | Four clues worth 40/30/20/10. One player/team attempt per clue, with eligibility reset for the next clue. |
-| Shootout | 10 per correct answer; that player sits out until eligible under the cycle rules below. |
+| Shootout (teams only) | 10 per correct answer; that player sits out until eligible under the cycle rules below. |
 
 Use meaningful individual adaptations in FFA and disable inherently
-team-dependent formats. A one-player Assigned game cannot pass an answer back
-to the same player as an opponent.
+team-dependent formats. Shootout is no longer available in FFA: those short
+questions remain in the normal Snapper pool, without retiring a player after
+scoring. Existing FFA settings that include Shootout map it to Snapper once,
+including configurations that enabled only Shootout. New blocks enforce this
+rule; an already-running block retains its rules until it ends. A one-player
+Assigned game cannot pass an answer back to the same player as an opponent.
 
 ### Equal opportunities for unequal teams
 
@@ -234,9 +242,10 @@ up to five Shootout successes, with a twenty-prompt Shootout cap. This provides
 equal primary allocations and team scoring ceilings, not equal individual turns
 or winning odds.
 
-**FFA Shootout:** each player may score once; end when everyone has scored or
-after `max(12, 2 × starting player count)` prompts. Reconnection, answer attempts
-and corrections do not count as additional presented prompts.
+**Superseded FFA Shootout:** the earlier player-retirement format and
+`max(12, 2 × starting player count)` block limit have been removed from FFA.
+Team Shootouts retain their prompt limits; reconnection, answer attempts and
+corrections do not count as additional presented prompts.
 
 ## Question sourcing and fallback
 

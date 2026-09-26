@@ -15,6 +15,8 @@ import {
 } from "./engine.ts";
 import {
   DEFAULT_CONFIG,
+  FORMATS,
+  configSchema,
   type Format,
   type GameAction,
   type PlayerView,
@@ -61,7 +63,13 @@ function initial(people = [person("a"), person("b")], options: Partial<RoomConfi
   let s = createSession(
     "session",
     people[0]!,
-    { ...structuredClone(DEFAULT_CONFIG), shortProgressive: false, autoAdvance: false, ...options },
+    {
+      ...structuredClone(DEFAULT_CONFIG),
+      formats: [...FORMATS],
+      shortProgressive: false,
+      autoAdvance: false,
+      ...options,
+    },
     0,
   );
   for (const p of people.slice(1)) s = addParticipant(s, p, 0);
@@ -514,12 +522,32 @@ test("idle pause is explicit and requires a moderator to resume", () => {
   assert.equal(s.pauses.length, 0);
 });
 
-test("team-dependent formats require two nonempty teams; FFA excludes scramble/bonuses", () => {
+test("team-dependent formats require two nonempty teams; FFA excludes scramble and Shootout", () => {
   const teams = initial([person("a", "A")], { mode: "teams" });
   assert.ok(
     !readyFormats(teams).some((format) => ["team", "assigned", "shootout"].includes(format)),
   );
   assert.ok(!readyFormats(initial()).includes("team"));
+  assert.ok(!readyFormats(initial()).includes("shootout"));
+});
+
+test("legacy FFA Shootout settings play as Snappers without retirement or duplicated weighting", () => {
+  const legacyConfig = { ...DEFAULT_CONFIG, formats: ["shootout" as const] };
+  assert.deepEqual(configSchema.parse(legacyConfig).formats, ["snapper"]);
+  assert.deepEqual(configSchema.parse({ ...legacyConfig, mode: "teams" }).formats, ["shootout"]);
+  let s = initial(undefined, legacyConfig);
+  // A stored session can predate schema normalization: readiness still handles it.
+  s.config.formats = ["shootout", "snapper"];
+  assert.deepEqual(readyFormats(s), ["snapper"]);
+  s = act(s, "a", { type: "start" });
+  assert.equal(startBlock(s, bundle("shootout"), 0), s, "the engine rejects FFA Shootout blocks");
+  s = startBlock(s, bundle("snapper", [atom(1)]), 0);
+  assert.equal(s.block!.count, 1);
+  s = answer(s, "a");
+  s = next(s);
+  s = startBlock(s, bundle("snapper", [atom(2)]), 0);
+  assert.equal(publicView(s, "a", 0).canBuzz, true, "a winner can answer the next normal question");
+  assert.deepEqual(s.usedIds, ["q-1", "q-2"]);
 });
 
 test("used questions cannot be replayed or duplicated inside a selected bundle", () => {
@@ -538,12 +566,12 @@ test("state transitions do not mutate snapshots held by the coordinator", () => 
 });
 
 test("a no-eligible dropout hold resumes only when the original eligible player returns", () => {
-  let s = start("shootout", [person("a"), person("b")]);
+  let s = start("shootout", [person("a", "A"), person("b", "B")], { mode: "teams" });
   s = answer(s, "a");
   s = setConnected(s, "b", false, 1);
   s = next(s, 2);
   assert.ok(s.pauses.includes("participants"));
-  s = addParticipant(s, person("new"), 3);
+  s = addParticipant(s, person("new", "B"), 3);
   assert.ok(s.pauses.includes("participants"));
   s = setConnected(s, "b", true, 4);
   assert.equal(s.pauses.length, 0);
@@ -552,15 +580,16 @@ test("a no-eligible dropout hold resumes only when the original eligible player 
 });
 
 test("resetting scores cannot resurrect erased points through a later correction", () => {
-  let s = start("shootout");
+  let s = start("shootout", [person("a", "A"), person("b", "B")], { mode: "teams" });
   s = answer(s, "a");
   const attempt = s.question!.attempts[0]!.id;
   s = act(s, "a", { type: "reset-scores" });
   assert.equal(s.players[0]!.score, 0);
-  assert.ok(s.block!.shoot.done.includes("a"));
+  assert.equal(s.block!.shoot.used.A, 1);
   s = act(s, "a", { type: "correct", attemptId: attempt, verdict: "reject" });
   assert.equal(s.players[0]!.score, 0);
-  assert.ok(!s.block!.shoot.done.includes("a"));
+  assert.equal(s.block!.shoot.used.A, 0);
+  assert.equal(s.teamScores.A, 0);
 });
 
 test("a same-verdict correction does not steal another player's active answer window", () => {
@@ -594,7 +623,7 @@ test("full spectators leave a returning identity capacity-waiting rather than ov
 });
 
 test("the Shootout prompt cap ends a block even when nobody scores", () => {
-  let s = start("shootout");
+  let s = start("shootout", [person("a", "A"), person("b", "B")], { mode: "teams" });
   for (let i = 0; i < 12; i++) {
     s = answer(s, "a", "wrong");
     s = answer(s, "b", "wrong");

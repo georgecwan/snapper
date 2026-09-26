@@ -131,6 +131,24 @@ test("team-only bundles require two nonempty teams", async () => {
   );
 });
 
+test("FFA converts saved Shootout selection to ordinary Snappers and never creates a Shootout", async () => {
+  const ffa = { ...config, mode: "ffa" as const, formats: ["shootout" as const] };
+  assert.deepEqual(bundledOptions("shootout", ffa, [], players), []);
+  const first = await selectBundle(ffa, [], players, fetch, () => 0.4);
+  assert.equal(first.bundle?.format, "snapper");
+  assert.equal(first.bundle?.atoms.length, 1);
+  const next = await selectBundle(
+    ffa,
+    first.bundle!.atoms.map((q) => q.id),
+    players,
+    fetch,
+    () => 0.4,
+  );
+  assert.equal(next.bundle?.format, "snapper");
+  assert.notEqual(next.bundle!.atoms[0]!.id, first.bundle!.atoms[0]!.id);
+  assert.equal(bundledOptions("shootout", config, [], players)[0]!.atoms.length, 32);
+});
+
 test("live trivia requests the block size instead of exhausting a pool smaller than fifty", async (t) => {
   let now = Date.now();
   t.mock.method(Date, "now", () => now);

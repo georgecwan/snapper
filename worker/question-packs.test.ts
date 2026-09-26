@@ -53,6 +53,32 @@ function fixture(shards: QuestionAtom[][], format = "tossup") {
 }
 const config = { ...DEFAULT_CONFIG, categories: ["Science" as const], source: "bundled" as const };
 
+function seededRandom(seed: number) {
+  return () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
+}
+
+function groupedFixture(groups: QuestionAtom[][]) {
+  const result = fixture([groups[0]!], "snapper");
+  const metadata = groups.map((atoms, n) => {
+    const category = atoms[0]!.category;
+    const directory = `snapper/group-${n}/medium`;
+    const index = `${directory}/index.json`;
+    const path = `${directory}/shard.json`;
+    result.files.set(index, { shards: [{ path, ids: atoms.map((q) => q.id) }] });
+    result.files.set(path, atoms);
+    return { format: "snapper", category, difficulty: "medium", index, count: atoms.length };
+  });
+  result.files.set("manifest.json", {
+    version: 1,
+    total: groups.flat().length,
+    groups: metadata,
+  });
+  return result;
+}
+
 test("one selection from thousands fetches one index and one shard, never the entire corpus", async () => {
   const shards = Array.from({ length: 40 }, (_, s) =>
     Array.from({ length: 128 }, (_, q) => question(128 * s + q)),
@@ -134,7 +160,7 @@ test("a complete short block contains exactly the required distinct unseen quest
   assert.ok(result.every((q) => !used.includes(q.id)));
 });
 
-test("block selection mixes weighted groups and redistributes exhausted demand without rereading indexes", async () => {
+test("block selection mixes groups and redistributes exhausted demand without rereading indexes", async () => {
   const science = Array.from({ length: 16 }, (_, n) => question(n));
   const history = Array.from({ length: 16 }, (_, n) => question(100 + n, { category: "History" }));
   for (const exhausted of [false, true]) {
@@ -157,22 +183,107 @@ test("block selection mixes weighted groups and redistributes exhausted demand w
     });
     files.set(historyIndex, { shards: [{ path: historyShard, ids: history.map((q) => q.id) }] });
     files.set(historyShard, history);
-    let draw = 0;
     const used = exhausted ? science.slice(0, 14).map((q) => q.id) : [];
     const result = await loader.select(
       "snapper",
       { ...config, categories: ["Science", "History"] },
       used,
       16,
-      () => (draw++ % 2 ? 0.9999 : 0),
+      seededRandom(481),
     );
     assert.equal(result.length, 16);
     assert.equal(new Set(result.map((q) => q.id)).size, 16);
     assert.ok(result.every((q) => !used.includes(q.id)));
-    assert.equal(result.filter((q) => q.category === "Science").length, exhausted ? 2 : 8);
+    assert.ok(result.some((q) => q.category === "Science"));
+    assert.ok(result.some((q) => q.category === "History"));
+    if (exhausted) assert.ok(result.filter((q) => q.category === "Science").length <= 2);
     assert.equal(requests.filter((path) => path === index).length, 1);
     assert.equal(requests.filter((path) => path === historyIndex).length, 1);
   }
+});
+
+test("fresh lobbies draw varied opening questions instead of replaying an indexed prefix", async () => {
+  const atoms = Array.from({ length: 16 }, (_, n) => question(n));
+  const { loader, requests } = fixture([atoms]);
+  const random = seededRandom(91235);
+  const openings = new Set<string>();
+  for (let lobby = 0; lobby < 128; lobby++) {
+    // A new lobby has no seen history, while the immutable asset cache survives.
+    const selected = await loader.select("tossup", config, [], 1, random);
+    openings.add(selected[0]!.id);
+  }
+  assert.equal(openings.size, atoms.length);
+  assert.equal(requests.length, 3, "fresh randomness must not require repeated asset downloads");
+});
+
+test("multi-question blocks give every indexed position the same selection chance", async () => {
+  const groups = ["Science", "History", "Geography"].map((category, group) =>
+    Array.from({ length: 4 }, (_, n) => question(100 * group + n, { category })),
+  );
+  const { loader } = groupedFixture(groups);
+  const random = seededRandom(7194);
+  const frequencies = new Map(groups.flat().map((atom) => [atom.id, 0]));
+  for (let lobby = 0; lobby < 1200; lobby++) {
+    const selected = await loader.select(
+      "snapper",
+      { ...config, categories: ["Science", "History", "Geography"] },
+      [],
+      4,
+      random,
+    );
+    assert.equal(new Set(selected.map((q) => q.id)).size, 4);
+    for (const atom of selected) frequencies.set(atom.id, frequencies.get(atom.id)! + 1);
+  }
+  // A fixed seed makes the regression deterministic. An unshuffled reservoir
+  // prefix heavily favors position 0 and almost never includes position 3.
+  for (const [id, frequency] of frequencies)
+    assert.ok(frequency >= 320 && frequency <= 480, `${id}: ${frequency}, expected about 400`);
+});
+
+test("used questions reduce group weight so each remaining question stays equally likely", async () => {
+  const science = Array.from({ length: 16 }, (_, n) => question(n));
+  const history = Array.from({ length: 16 }, (_, n) => question(100 + n, { category: "History" }));
+  const { loader, requests } = groupedFixture([science, history]);
+  const used = science.slice(0, 15).map((q) => q.id);
+  const random = seededRandom(97125);
+  let scienceSelections = 0;
+  for (let draw = 0; draw < 3400; draw++) {
+    const selected = await loader.select(
+      "snapper",
+      { ...config, categories: ["Science", "History"] },
+      used,
+      1,
+      random,
+    );
+    assert.equal(selected.length, 1);
+    assert.ok(!used.includes(selected[0]!.id));
+    if (selected[0]!.category === "Science") scienceSelections++;
+  }
+  assert.ok(
+    scienceSelections >= 150 && scienceSelections <= 250,
+    `${scienceSelections} Science draws; expected about 200 from its one of 17 unseen questions`,
+  );
+  assert.equal(requests.length, 5, "manifest, two indexes and two shards are cached");
+});
+
+test("a fresh draw loads only its selected group, with no eager reads of other indexes", async () => {
+  const groups = ["Science", "History", "Geography"].map((category, group) => [
+    question(group, { category }),
+  ]);
+  const { loader, requests } = groupedFixture(groups);
+  const selected = await loader.select(
+    "snapper",
+    { ...config, categories: ["Science", "History", "Geography"] },
+    [],
+    1,
+    () => 0.9,
+  );
+  assert.equal(selected[0]!.category, "Geography");
+  assert.deepEqual(requests, [
+    "manifest.json",
+    "snapper/group-2/medium/index.json",
+    "snapper/group-2/medium/shard.json",
+  ]);
 });
 
 test("bounded shard caches evict older data instead of accumulating the corpus", async () => {

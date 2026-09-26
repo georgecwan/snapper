@@ -123,6 +123,13 @@ function sample(
       if (position < count) result[position] = { id, path: shard.path };
       available++;
     }
+  // A reservoir is a uniform set, not a uniformly ordered set: its first
+  // original entries stay in their original slots unless replaced. Each group
+  // may contribute fewer than `count` questions, so randomize before slicing.
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = randomIndex(i + 1, random);
+    [result[i], result[j]] = [result[j]!, result[i]!];
+  }
   return { questions: result, available };
 }
 
@@ -224,11 +231,14 @@ export class QuestionPacks {
     const result: QuestionAtom[] = [];
     // Draw a group per question, then batch each group's demand. This keeps
     // multiplayer blocks varied without loading every matching index first.
-    // Unloaded groups use manifest counts; loaded groups have exact unseen
-    // counts. Exhausted groups are removed and any shortage is redistributed.
+    // Manifest counts bound each unloaded group's unseen count. Once loaded,
+    // accept that draw with unseen/previous probability before reducing its
+    // weight. Otherwise depleted groups would be overrepresented. This is
+    // rejection sampling with progressively tighter bounds; each unseen ID
+    // has equal probability without eagerly reading every eligible index.
     while (groups.some((group) => group.remaining > 0) && result.length < count) {
       const demand = new Map<(typeof groups)[number], number>();
-      for (let n = result.length; n < count; n++) {
+      for (let n = result.length; n < count;) {
         const weight = (group: (typeof groups)[number]) =>
           Math.max(0, group.remaining - (demand.get(group) ?? 0));
         const total = groups.reduce((sum, group) => sum + weight(group), 0);
@@ -237,7 +247,24 @@ export class QuestionPacks {
         for (const group of groups) {
           const available = weight(group);
           if (ticket < available) {
+            if (!group.choices) {
+              try {
+                const index = await this.getIndex(group);
+                const selected = sample(index, used, count, random);
+                group.choices = selected.questions;
+                group.remaining = selected.available;
+                if (
+                  !group.remaining ||
+                  (group.remaining < available && randomIndex(available, random) >= group.remaining)
+                )
+                  break;
+              } catch {
+                group.remaining = 0;
+                break;
+              }
+            }
             demand.set(group, (demand.get(group) ?? 0) + 1);
+            n++;
             break;
           }
           ticket -= available;
@@ -245,15 +272,9 @@ export class QuestionPacks {
       }
       for (const [group, needed] of demand) {
         try {
-          if (!group.choices) {
-            const index = await this.getIndex(group);
-            const selected = sample(index, used, count, random);
-            group.choices = selected.questions;
-            group.remaining = selected.available;
-          }
-          const locations = group.choices.splice(0, needed);
+          const locations = group.choices!.splice(0, needed);
           group.remaining -= locations.length;
-          if (!group.choices.length) group.remaining = 0;
+          if (!group.choices!.length) group.remaining = 0;
           const byPath = new Map<string, LocatedQuestion[]>();
           for (const location of locations)
             byPath.set(location.path, [...(byPath.get(location.path) ?? []), location]);

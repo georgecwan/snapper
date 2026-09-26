@@ -5,6 +5,7 @@ import {
   configSchema,
   FORMATS,
   FORMAT_LABELS,
+  normalizeFormats,
   type RoomConfig,
 } from "@/snapper/protocol";
 
@@ -16,11 +17,14 @@ interface Props {
 }
 
 export function ConfigPanel({ config, editable, onSave, pending }: Props) {
-  const [edited, setDraft] = useState<RoomConfig>(() => structuredClone(config));
-  const draft = editable ? edited : config;
+  const [edited, setDraft] = useState<RoomConfig>(() => configSchema.parse(config));
+  const draft = editable ? edited : configSchema.parse(config);
   const [error, setError] = useState("");
   const update = <K extends keyof RoomConfig>(key: K, value: RoomConfig[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDraft((current) => {
+      const next = { ...current, [key]: value };
+      return { ...next, formats: normalizeFormats(next.mode, next.formats) };
+    });
   const numeric = (
     label: string,
     key: "wpm" | "answerMs" | "sequenceMs" | "graceMs" | "revealMs",
@@ -128,7 +132,10 @@ export function ConfigPanel({ config, editable, onSave, pending }: Props) {
               <input
                 type="checkbox"
                 checked={draft.formats.includes(format)}
-                disabled={draft.formats.length === 1 && draft.formats.includes(format)}
+                disabled={
+                  (format === "shootout" && draft.mode === "ffa") ||
+                  (draft.formats.length === 1 && draft.formats.includes(format))
+                }
                 onChange={(event) =>
                   update(
                     "formats",
@@ -140,7 +147,7 @@ export function ConfigPanel({ config, editable, onSave, pending }: Props) {
               />
               <span>
                 {FORMAT_LABELS[format]}
-                {format === "team" && <small>Two teams required</small>}
+                {(format === "team" || format === "shootout") && <small>Two teams required</small>}
               </span>
               <Check size={15} aria-hidden="true" />
             </label>

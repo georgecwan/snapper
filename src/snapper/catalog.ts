@@ -1,5 +1,12 @@
 import { CLUES, GROUPS, SEQUENCES, SHORTS, TOSSUPS } from "./bank.ts";
-import type { Format, PlayerView, QuestionAtom, QuestionBundle, RoomConfig } from "./protocol.ts";
+import {
+  normalizeFormats,
+  type Format,
+  type PlayerView,
+  type QuestionAtom,
+  type QuestionBundle,
+  type RoomConfig,
+} from "./protocol.ts";
 
 /** Injected by the server; browser code must never import a repository pack. */
 export type RepositoryQuestionLoader = (
@@ -69,6 +76,7 @@ export function bundledOptions(
   players: PlayerView[],
   random: () => number = Math.random,
 ): QuestionBundle[] {
+  if (format === "shootout" && config.mode === "ffa") return [];
   const seen = new Set(usedIds);
   const usable = (q: QuestionAtom) => eligible(q, config, seen);
   if (format === "open" || format === "team")
@@ -331,7 +339,7 @@ export async function selectBundle(
     return { bundle: null, message: "A player needs to take a seat before play can continue." };
   const bothTeams = active.some((p) => p.team === "A") && active.some((p) => p.team === "B");
   const formats = shuffled(
-    config.formats
+    normalizeFormats(config.mode, config.formats)
       .filter((f) => f !== "team" || (config.mode === "teams" && bothTeams))
       .filter((f) => config.mode !== "teams" || !["assigned", "shootout"].includes(f) || bothTeams),
     random,

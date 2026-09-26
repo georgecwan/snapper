@@ -1,4 +1,5 @@
 import {
+  normalizeFormats,
   actionSchema,
   configSchema,
   type AttemptView,
@@ -291,7 +292,7 @@ export function readyFormats(state: Session): Format[] {
   if (!players.length) return [];
   const bothTeams =
     players.some((player) => player.team === "A") && players.some((player) => player.team === "B");
-  return config.formats.filter((format) => {
+  return normalizeFormats(config.mode, config.formats).filter((format) => {
     if (config.mode === "ffa") return format !== "team";
     if (!players.some((player) => player.team)) return false;
     return !["team", "assigned", "shootout"].includes(format) || bothTeams;
@@ -318,6 +319,7 @@ function participantsFor(state: Session, block: Block, index: number): string[] 
   if (block.bundle.format === "team" && index > 0)
     return block.rosterIds.filter((id) => block.teams[id] === block.bonusTeam);
   if (block.bundle.format === "shootout") {
+    // A recovered pre-migration FFA block finishes its original rules; no new one can start.
     if (state.config.mode === "ffa")
       return block.rosterIds.filter((id) => !block.shoot.done.includes(id));
     const max = Math.max(
@@ -400,14 +402,11 @@ export function startBlock(previous: Session, bundle: QuestionBundle, now: numbe
     }
     count = turns.length;
   } else if (bundle.format === "shootout") {
-    const n =
-      state.config.mode === "ffa"
-        ? rosterIds.length
-        : Math.max(
-            rosterIds.filter((id) => teams[id] === "A").length,
-            rosterIds.filter((id) => teams[id] === "B").length,
-          );
-    count = Math.max(12, (state.config.mode === "ffa" ? 2 : 4) * n);
+    const n = Math.max(
+      rosterIds.filter((id) => teams[id] === "A").length,
+      rosterIds.filter((id) => teams[id] === "B").length,
+    );
+    count = Math.max(12, 4 * n);
   } else if (bundle.format === "team") count = 4;
   else if (bundle.format !== "open") count = 1;
   const selected = bundle.atoms.slice(0, count);

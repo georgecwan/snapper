@@ -38,7 +38,8 @@ export const FORMAT_DESCRIPTIONS = {
   team: "Win the scramble to earn three exclusive questions for your team.",
   assigned: "A question assigned to one player. A miss passes to the designated opponent.",
   clues: "Four clues, one answer. The earlier you know it, the more you score.",
-  shootout: "A correct answer takes you out of the current cycle until every player has scored.",
+  shootout:
+    "Teams get equal scoring opportunities. Score once, then sit out until your team's next cycle.",
 } as const;
 
 function Logo() {
@@ -357,7 +358,7 @@ export function SnapperApp() {
                   <h3>{FORMAT_LABELS[format]}</h3>
                   <p>
                     {FORMAT_DESCRIPTIONS[format]}
-                    {format === "team" && " Available in team mode."}
+                    {(format === "team" || format === "shootout") && " Available in team mode."}
                   </p>
                 </div>
               </article>
