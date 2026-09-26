@@ -2784,3 +2784,38 @@ summary::-webkit-details-marker {
     padding-right: 16px;
   }
 }
+
+/* The reveal countdown advances within the existing server-owned pause. */
+.question-bottom:has(.next-question-countdown) {
+  background: #f0f2ff;
+  border-top-color: #e0e4ff;
+}
+.next-question-countdown {
+  color: var(--blue);
+  min-width: 65px;
+  justify-content: flex-end;
+}
+.next-question-countdown > span {
+  display: inline-block;
+  transform-origin: center;
+  animation: next-second 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes next-second {
+  from {
+    transform: translateY(4px) scale(1.22);
+    opacity: 0.45;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.choose-team-callout {
+  flex-wrap: wrap;
+}
+.choose-team-callout .button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

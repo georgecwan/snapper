@@ -27,6 +27,36 @@ export const FORMAT_LABELS: Record<Format, string> = {
   clues: "Who / What am I?",
 };
 export type Team = "A" | "B";
+export const AVATARS = [
+  "⚡",
+  "🦊",
+  "🐸",
+  "🐙",
+  "🐼",
+  "🦉",
+  "🐱",
+  "🐶",
+  "🦖",
+  "🚀",
+  "🌵",
+  "🍄",
+  "👾",
+  "🤖",
+  "🎲",
+  "🌈",
+] as const;
+export type Avatar = (typeof AVATARS)[number];
+export const REACTIONS = ["😂", "👏", "😮", "💀"] as const;
+export type Reaction = (typeof REACTIONS)[number];
+export const REACTION_COOLDOWN_MS = 2000;
+export const DEFAULT_TEAM_NAMES: Record<Team, string> = { A: "Team A", B: "Team B" };
+export interface ReactionView {
+  id: string;
+  playerId: string;
+  name: string;
+  emoji: Reaction;
+  at: number;
+}
 export const CATEGORIES = [
   "Science",
   "Math",
@@ -134,6 +164,8 @@ export interface QuestionBundle {
 export interface PlayerView {
   id: string;
   name: string;
+  /** Session-only choice; older participants use a stable default in the UI. */
+  avatar?: Avatar;
   team: Team | null;
   score: number;
   role: "player" | "spectator";
@@ -147,6 +179,8 @@ export interface AttemptView {
   id: string;
   playerId: string;
   name: string;
+  /** Team credited for this attempt, independent of later team changes. */
+  team?: Team | null;
   answer: string;
   verdict: "accept" | "reject" | "prompt";
   points: number;
@@ -187,6 +221,11 @@ export interface SessionView {
   pausedReasons: string[];
   players: PlayerView[];
   teamScores: Record<Team, number>;
+  teamNames: Record<Team, string>;
+  /** Bounded reactions to the currently revealed question. */
+  reactions: ReactionView[];
+  /** This participant's server-owned cooldown, including after reconnects. */
+  reactionReadyAt: number;
   block: {
     id: string;
     format: Format;
@@ -214,6 +253,20 @@ export interface SessionView {
   notice: string | null;
 }
 export const actionSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("avatar"), avatar: z.enum(AVATARS) }).strict(),
+  z.object({ type: z.literal("react"), emoji: z.enum(REACTIONS) }).strict(),
+  z
+    .object({
+      type: z.literal("rename-team"),
+      team: z.enum(["A", "B"]),
+      name: z
+        .string()
+        .trim()
+        .min(1)
+        .max(24)
+        .refine((value) => !/\p{Cc}/u.test(value)),
+    })
+    .strict(),
   z.object({ type: z.literal("buzz") }).strict(),
   z.object({ type: z.literal("answer"), text: z.string().trim().min(1).max(500) }).strict(),
   z.object({ type: z.literal("chat"), text: z.string().trim().min(1).max(500) }).strict(),

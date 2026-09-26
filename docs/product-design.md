@@ -319,6 +319,38 @@ odds.
   actions and reliable keyboard focus. Removal remains session-only and follows
   the existing owner/moderator permission rules.
 
+### Play feedback and personality
+
+The owner approved scoring celebrations, post-answer reactions, a mobile score
+strip, emoji avatars/custom team names, and clearer transitions. Animations are
+wanted. Session highlights, streaks, badges and milestone awards were explicitly
+excluded; do not add them as part of this work.
+
+- Show the current winner and awarded points beside the revealed answer, animate
+  score changes, and mark a genuine change of leader. Ties are explicit. Respect
+  corrections and score resets; do not award extra points or replay celebrations
+  merely because someone reconnects.
+- Keep celebrations brief, within the game layout, and inside the existing reveal
+  interval. They must not block answers, cover question text or delay the next
+  question. Honour reduced-motion preferences and the existing sound mute.
+- Approved players and spectators may react with 😂, 👏, 😮 or 💀 only after an
+  answer is revealed. The server enforces a two-second per-person cooldown and a
+  bounded list of current-question reactions. Clear reactions on the next
+  question/session; reactions do not extend timers, score or prevent idle pause.
+- Mobile keeps a compact score comparison visible while reading: your score and
+  the leader in FFA, both named team totals in team mode. Spectators see the
+  leaders. The full scoreboard stays available with one tap.
+- Participants choose their own emoji avatar from the provided set. Colours and
+  default avatars follow player identity rather than scoreboard position. Avatar
+  choices survive reconnects within the active session, not future game nights.
+- The owner can name the two teams for the current session. Names are labels;
+  stable A/B identities still control membership and previously earned points.
+  Team names do not modify saved gameplay settings or grant extra permissions.
+- At each new question, briefly show its format and scoring reminder. Show an
+  explicit automatic next-question countdown during reveal, or indicate manual
+  advancement. These use existing server deadlines and revealed metadata, never
+  future content or client-owned progression.
+
 ## Architecture and implementation status
 
 Snapper uses a static React frontend, one Cloudflare Worker

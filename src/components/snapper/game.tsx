@@ -31,6 +31,9 @@ import {
 import type { SessionController } from "@/snapper/use-session";
 import { gameShortcut, moderationActions } from "@/snapper/shortcuts";
 import { Chat, Scoreboard, SeatButtons } from "./community";
+import { MobileScoreStrip } from "./community-extras";
+import { FormatCue, Reactions, ScoringMoment } from "./play-effects";
+import { playerAvatar, teamName } from "@/snapper/identity";
 import { Menu } from "./menu";
 
 export type Confirm = (
@@ -289,6 +292,7 @@ export function Game({
           </button>
         ))}
       </nav>
+      <MobileScoreStrip state={state} onScores={() => setTab("scores")} />
       <div className="game-grid">
         <section
           className={`play-column mobile-panel ${tab === "game" ? "mobile-active" : ""}`}
@@ -309,6 +313,7 @@ export function Game({
                 )}
               </div>
             </div>
+            <FormatCue state={state} />
             {paused && (
               <div className="pause-strip" role="status">
                 <Pause size={17} fill="currentColor" />
@@ -354,6 +359,7 @@ export function Game({
                       Give {question.sequenceLength} items in order, separated by commas.
                     </p>
                   )}
+                  <ScoringMoment state={state} connected={connected} />
                   {state.phase === "answering" &&
                     state.answerWindowId &&
                     currentAnswerer &&
@@ -365,6 +371,7 @@ export function Game({
                       >
                         <div className="live-guess-heading">
                           <strong>
+                            <span aria-hidden="true">{playerAvatar(currentAnswerer)} </span>
                             {currentAnswerer.name}
                             {connected && currentAnswerer.connected && !paused
                               ? " is typing…"
@@ -435,20 +442,29 @@ export function Game({
                     : state.phase === "answering"
                       ? "Answer in progress"
                       : state.phase === "reveal"
-                        ? "Answer revealed"
+                        ? state.config.autoAdvance
+                          ? seconds === 0
+                            ? "Getting the next question…"
+                            : "Next question in"
+                          : "Ready for the next question"
                         : "Waiting for the first round"}
               </span>
               {seconds !== null &&
+                connected &&
                 !paused &&
+                !(state.phase === "reveal" && seconds === 0) &&
                 (state.phase !== "reveal" || state.config.autoAdvance) && (
                   <span
-                    className={`countdown ${seconds < 3 ? "is-urgent" : ""}`}
-                    aria-label={`${state.phase === "answering" ? "Answer" : "Round"} timer`}
+                    className={`countdown ${state.phase === "reveal" ? "next-question-countdown" : seconds < 3 ? "is-urgent" : ""}`}
+                    aria-label={`${state.phase === "answering" ? "Answer" : state.phase === "reveal" ? "Next question" : "Round"} timer`}
                     aria-live="off"
                   >
                     <Clock3 size={16} />
-                    <span aria-hidden="true">
-                      {seconds.toFixed(1)}
+                    <span
+                      key={state.phase === "reveal" ? Math.ceil(seconds) : "active-timer"}
+                      aria-hidden="true"
+                    >
+                      {state.phase === "reveal" ? Math.ceil(seconds) : seconds.toFixed(1)}
                       <small>s</small>
                     </span>
                   </span>
@@ -458,11 +474,18 @@ export function Game({
           <div className="buzz-zone" ref={buzzZone}>
             <div className="buzz-copy" role="status" aria-live="polite">
               <span className="your-name">
+                {self && <span aria-hidden="true">{playerAvatar(self)}</span>}
                 {self?.name ?? "Your seat"}
                 {self?.owner && <Crown size={13} />}
               </span>
               <span>{eligibility}</span>
             </div>
+            <Reactions
+              state={state}
+              send={send}
+              connected={connected}
+              now={now + session.clockOffset}
+            />
             {self?.role === "spectator" ? (
               <div className="spectator-actions">
                 <span>
@@ -471,7 +494,7 @@ export function Game({
                 </span>
                 <SeatButtons state={state} send={send} disabled={!connected} />
               </div>
-            ) : (
+            ) : state.phase !== "reveal" ? (
               <>
                 {state.config.mode === "teams" && !self?.team && (
                   <div className="choose-team-callout">
@@ -482,7 +505,7 @@ export function Game({
                         key={team}
                         onClick={() => send({ type: "team", team })}
                       >
-                        Team {team}
+                        {teamName(state, team)}
                       </button>
                     ))}
                   </div>
@@ -561,7 +584,7 @@ export function Game({
                   <kbd>SPACE</kbd>
                 </button>
               </>
-            )}
+            ) : null}
           </div>
           {question && (
             <div className="question-actions">
@@ -582,7 +605,13 @@ export function Game({
           <section
             className={`score-panel mobile-panel ${tab === "scores" ? "mobile-active" : ""}`}
           >
-            <Scoreboard state={state} self={self} send={send} confirm={confirm} />
+            <Scoreboard
+              state={state}
+              self={self}
+              send={send}
+              confirm={confirm}
+              connected={connected}
+            />
           </section>
           <section className={`chat-panel mobile-panel ${tab === "chat" ? "mobile-active" : ""}`}>
             <Chat state={state} send={send} connected={connected} inputRef={chatInput} />

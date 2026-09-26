@@ -1,8 +1,19 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { ArrowRight, Check, Eye, MessageCircle, MoreHorizontal, Send, Trophy } from "lucide-react";
-import type { GameAction, PlayerView, SessionView } from "@/snapper/protocol";
+import {
+  ArrowRight,
+  Check,
+  Eye,
+  MessageCircle,
+  MoreHorizontal,
+  Pencil,
+  Send,
+  Trophy,
+} from "lucide-react";
+import type { GameAction, PlayerView, SessionView, Team } from "@/snapper/protocol";
+import { playerAvatar, playerColor, teamName } from "@/snapper/identity";
 import type { Confirm } from "./game";
 import { Menu } from "./menu";
+import { AnimatedScore, AvatarPicker, TeamNameEditor } from "./community-extras";
 
 type SendAction = (action: GameAction) => boolean;
 
@@ -23,6 +34,7 @@ export function SeatButtons({
           <button
             className="button primary mini"
             key={team}
+            aria-label={`Join ${teamName(state, team)} (team ${team})`}
             disabled={
               disabled ||
               players.length >= 16 ||
@@ -30,7 +42,10 @@ export function SeatButtons({
             }
             onClick={() => send({ type: "take-seat", team })}
           >
-            Join team {team}
+            Join {teamName(state, team)}
+            <span className="team-letter" aria-hidden="true">
+              {team}
+            </span>
             <ArrowRight size={15} />
           </button>
         ))
@@ -97,12 +112,16 @@ export function Scoreboard({
   self,
   send,
   confirm,
+  connected = true,
 }: {
   state: SessionView;
   self?: PlayerView;
   send: SendAction;
   confirm: Confirm;
+  connected?: boolean;
 }) {
+  const [avatarTrigger, setAvatarTrigger] = useState<HTMLElement | null>(null);
+  const [teamEditor, setTeamEditor] = useState<{ team: Team; trigger: HTMLElement } | null>(null);
   const sorted = [...state.players]
     .filter((player) => player.role === "player" || player.score !== 0)
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
@@ -124,8 +143,25 @@ export function Scoreboard({
         <div className="team-scores">
           {(["A", "B"] as const).map((team) => (
             <div className={`team-score team-${team.toLowerCase()}`} key={team}>
-              <span>TEAM {team}</span>
-              <strong>{state.teamScores[team]}</strong>
+              <div className="team-title-row">
+                <small className="team-identifier">TEAM {team}</small>
+                {self?.owner && (
+                  <button
+                    type="button"
+                    className="team-rename"
+                    disabled={!connected}
+                    aria-label={`Rename ${teamName(state, team)} (team ${team})`}
+                    title="Rename team"
+                    onClick={(event) => setTeamEditor({ team, trigger: event.currentTarget })}
+                  >
+                    <Pencil size={14} />
+                  </button>
+                )}
+              </div>
+              <span className="team-display-name">{teamName(state, team)}</span>
+              <strong>
+                <AnimatedScore value={state.teamScores[team]} />
+              </strong>
               <small>
                 {
                   state.players.filter(
@@ -152,9 +188,24 @@ export function Scoreboard({
                 String(index + 1).padStart(2, "0")
               )}
             </span>
-            <div className={`player-avatar avatar-${index % 4}`}>
-              {player.name.slice(0, 1).toUpperCase()}
-            </div>
+            {player.id === self?.id ? (
+              <button
+                type="button"
+                className={`player-avatar identity-avatar avatar-${playerColor(player.id)}`}
+                aria-label="Change your avatar"
+                disabled={!connected}
+                onClick={(event) => setAvatarTrigger(event.currentTarget)}
+              >
+                <span aria-hidden="true">{playerAvatar(player)}</span>
+              </button>
+            ) : (
+              <span
+                className={`player-avatar identity-avatar avatar-${playerColor(player.id)}`}
+                aria-hidden="true"
+              >
+                {playerAvatar(player)}
+              </span>
+            )}
             <div className="player-name">
               <strong>
                 {player.name}
@@ -170,7 +221,7 @@ export function Scoreboard({
                         ? "Watching"
                         : "",
                   player.owner ? "Owner" : player.moderator ? "Moderator" : "",
-                  player.team ? `Team ${player.team}` : "",
+                  player.team ? teamName(state, player.team) : "",
                   player.connected &&
                   !player.owner &&
                   !player.moderator &&
@@ -185,7 +236,9 @@ export function Scoreboard({
                   .join(" · ")}
               </span>
             </div>
-            <strong className="player-score">{player.score}</strong>
+            <strong className="player-score">
+              <AnimatedScore value={player.score} />
+            </strong>
             <ParticipantMenu
               player={player}
               state={state}
@@ -201,6 +254,22 @@ export function Scoreboard({
       )}
       {self && (
         <div className="seat-controls">
+          <div className="identity-controls">
+            <button
+              type="button"
+              className="avatar-control"
+              disabled={!connected}
+              onClick={(event) => setAvatarTrigger(event.currentTarget)}
+            >
+              <span
+                className={`player-avatar identity-avatar avatar-${playerColor(self.id)}`}
+                aria-hidden="true"
+              >
+                {playerAvatar(self)}
+              </span>
+              Change avatar
+            </button>
+          </div>
           {state.config.mode === "teams" && self.role === "player" && (
             <div className="team-choice">
               <span>Your team</span>
@@ -209,7 +278,9 @@ export function Scoreboard({
                   key={team}
                   className={self.team === team ? "selected" : ""}
                   aria-pressed={self.team === team}
+                  aria-label={`Choose ${teamName(state, team)} (team ${team})`}
                   disabled={
+                    !connected ||
                     self.team === team ||
                     state.players.filter(
                       (player) =>
@@ -218,7 +289,10 @@ export function Scoreboard({
                   }
                   onClick={() => send({ type: "team", team })}
                 >
-                  Team {team}
+                  {teamName(state, team)}
+                  <span className="team-letter" aria-hidden="true">
+                    {team}
+                  </span>
                   {self.team === team && <Check size={13} />}
                 </button>
               ))}
@@ -227,6 +301,7 @@ export function Scoreboard({
           {self.role === "player" ? (
             <button
               className="text-link subtle"
+              disabled={!connected}
               onClick={() =>
                 confirm(
                   "Switch to spectator?",
@@ -240,7 +315,7 @@ export function Scoreboard({
               <Eye size={14} /> Switch to watching
             </button>
           ) : (
-            <SeatButtons state={state} send={send} />
+            <SeatButtons state={state} send={send} disabled={!connected} />
           )}
         </div>
       )}
@@ -251,9 +326,29 @@ export function Scoreboard({
         </div>
         {spectators.map((player) => (
           <div key={player.id}>
-            <span>
-              {player.name}
-              {player.id === self?.id && " (you)"}
+            <span className="spectator-identity">
+              {player.id === self?.id ? (
+                <button
+                  type="button"
+                  className={`player-avatar identity-avatar avatar-${playerColor(player.id)}`}
+                  aria-label="Change your avatar"
+                  disabled={!connected}
+                  onClick={(event) => setAvatarTrigger(event.currentTarget)}
+                >
+                  <span aria-hidden="true">{playerAvatar(player)}</span>
+                </button>
+              ) : (
+                <span
+                  className={`player-avatar identity-avatar avatar-${playerColor(player.id)}`}
+                  aria-hidden="true"
+                >
+                  {playerAvatar(player)}
+                </span>
+              )}
+              <span>
+                {player.name}
+                {player.id === self?.id && " (you)"}
+              </span>
             </span>
             <ParticipantMenu
               player={player}
@@ -265,6 +360,25 @@ export function Scoreboard({
           </div>
         ))}
       </div>
+      {avatarTrigger && self && (
+        <AvatarPicker
+          player={self}
+          send={send}
+          connected={connected}
+          onClose={() => setAvatarTrigger(null)}
+          returnFocus={avatarTrigger}
+        />
+      )}
+      {teamEditor && self?.owner && (
+        <TeamNameEditor
+          state={state}
+          team={teamEditor.team}
+          send={send}
+          connected={connected}
+          onClose={() => setTeamEditor(null)}
+          returnFocus={teamEditor.trigger}
+        />
+      )}
     </>
   );
 }
@@ -317,7 +431,19 @@ export function Chat({
               key={message.id}
             >
               <div>
-                <strong>{message.name}</strong>
+                <strong className="chat-author">
+                  <span
+                    className={`chat-avatar avatar-${playerColor(message.playerId)}`}
+                    aria-hidden="true"
+                  >
+                    {playerAvatar(
+                      state.players.find((player) => player.id === message.playerId) ?? {
+                        id: message.playerId,
+                      },
+                    )}
+                  </span>
+                  {message.name}
+                </strong>
                 <time dateTime={new Date(message.at).toISOString()}>
                   {new Date(message.at).toLocaleTimeString([], {
                     hour: "2-digit",

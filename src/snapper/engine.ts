@@ -2,6 +2,8 @@ import {
   normalizeFormats,
   actionSchema,
   configSchema,
+  DEFAULT_TEAM_NAMES,
+  REACTION_COOLDOWN_MS,
   type AttemptView,
   type ChatMessage,
   type Format,
@@ -9,6 +11,7 @@ import {
   type PlayerView,
   type QuestionAtom,
   type QuestionBundle,
+  type ReactionView,
   type RoomConfig,
   type SessionView,
   type Team,
@@ -73,6 +76,10 @@ export interface Session {
   needsBlock: boolean;
   phase: SessionView["phase"];
   teamScores: Scores;
+  teamNames: Record<Team, string>;
+  reactions: ReactionView[];
+  /** Retained across question changes and reconnects to enforce the actor cooldown. */
+  reactionAt: Record<string, number>;
   block: Block | null;
   question: Question | null;
   chat: ChatMessage[];
@@ -180,6 +187,7 @@ function waitingState(state: Session, now: number): void {
   state.phase = "waiting";
   state.block = null;
   state.question = null;
+  state.reactions = [];
   state.challenge = null;
   clearPause(state, "challenge", now);
   clearPause(state, "participants", now);
@@ -206,6 +214,9 @@ export function createSession(
     needsBlock: false,
     phase: "waiting",
     teamScores: { A: 0, B: 0 },
+    teamNames: clone(DEFAULT_TEAM_NAMES),
+    reactions: [],
+    reactionAt: {},
     block: null,
     question: null,
     chat: [],
@@ -234,6 +245,9 @@ export function migrateSession(previous: Session, now: number): Session {
   const legacyBlock = (previous.block?.bundle.format as string | undefined) === "shootout";
   if (
     !legacyBlock &&
+    previous.teamNames &&
+    previous.reactions &&
+    previous.reactionAt &&
     sameFormats(formats, previous.config.formats) &&
     (!previous.pendingConfig || sameFormats(pendingFormats!, previous.pendingConfig.formats)) &&
     !(previous.block && "shoot" in previous.block) &&
@@ -242,6 +256,9 @@ export function migrateSession(previous: Session, now: number): Session {
     return previous;
 
   const state = clone(previous);
+  state.teamNames ??= clone(DEFAULT_TEAM_NAMES);
+  state.reactions ??= [];
+  state.reactionAt ??= {};
   state.config.formats = formats;
   if (state.pendingConfig) state.pendingConfig.formats = pendingFormats!;
   if (state.block) delete (state.block as Block & { shoot?: unknown }).shoot;
@@ -266,6 +283,7 @@ export function migrateSession(previous: Session, now: number): Session {
     } else {
       state.block = null;
       state.phase = "waiting";
+      state.reactions = [];
       applyConfiguration(state);
       applyPendingTeams(state);
     }
@@ -462,6 +480,7 @@ function beginQuestion(state: Session, index: number, now: number): void {
   const block = state.block!;
   if (!frozen(block.bundle.format)) applyPendingTeams(state);
   block.index = index;
+  state.reactions = [];
   state.challenge = null;
   clearPause(state, "challenge", now);
   const people = frozen(block.bundle.format)
@@ -763,7 +782,14 @@ export function transition(
   const actor = current.players.find((player) => player.id === actorId);
   if (!actor?.connected || current.removedIds.includes(actorId))
     return error(current, "An approved active connection is required.");
-  const ownerActions = ["configure", "promote", "approve", "reject", "close-session"];
+  const ownerActions = [
+    "configure",
+    "promote",
+    "approve",
+    "reject",
+    "close-session",
+    "rename-team",
+  ];
   const moderatorActions = [
     "start",
     "next",
@@ -786,6 +812,29 @@ export function transition(
     player = state.players.find((value) => value.id === actorId)!;
   const q = state.question;
   switch (action.type) {
+    case "avatar":
+      player.avatar = action.avatar;
+      break;
+    case "rename-team":
+      state.teamNames[action.team] = action.name;
+      break;
+    case "react": {
+      if (state.phase !== "reveal" || !q)
+        return error(current, "Reactions are available after the current answer is revealed.");
+      const last = state.reactionAt[actorId];
+      if (last !== undefined && now - last < REACTION_COOLDOWN_MS)
+        return error(current, "Wait two seconds between reactions.");
+      state.reactionAt[actorId] = now;
+      state.reactions.push({
+        id: `${state.id}:reaction:${++state.serial}`,
+        playerId: actorId,
+        name: player.name,
+        emoji: action.emoji,
+        at: now,
+      });
+      state.reactions = state.reactions.slice(-64);
+      break;
+    }
     case "chat":
       state.chat.push({
         id: `${state.id}:chat:${++state.serial}`,
@@ -1037,6 +1086,10 @@ export function publicView(state: Session, selfId: string, now: number): Session
       removed: state.removedIds.includes(player.id),
     })),
     teamScores: clone(state.teamScores),
+    teamNames: clone(state.teamNames),
+    reactions: clone(state.reactions),
+    reactionReadyAt:
+      state.reactionAt[selfId] === undefined ? 0 : state.reactionAt[selfId] + REACTION_COOLDOWN_MS,
     block: b
       ? {
           id: `${state.id}:block:${state.blockNumber}`,
@@ -1062,10 +1115,11 @@ export function publicView(state: Session, selfId: string, now: number): Session
           }
         : null,
     attempts: q
-      ? q.attempts.map(({ id, playerId, name, answer, verdict, points, corrected }) => ({
+      ? q.attempts.map(({ id, playerId, name, team, answer, verdict, points, corrected }) => ({
           id,
           playerId,
           name,
+          team,
           answer,
           verdict,
           points,

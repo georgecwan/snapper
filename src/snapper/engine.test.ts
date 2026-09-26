@@ -16,7 +16,9 @@ import {
 } from "./engine.ts";
 import {
   DEFAULT_CONFIG,
+  DEFAULT_TEAM_NAMES,
   FORMATS,
+  REACTION_COOLDOWN_MS,
   configSchema,
   type Format,
   type GameAction,
@@ -716,4 +718,207 @@ test("restoring serialized coordinator state preserves deadlines and eligibility
   const restored: Session = JSON.parse(JSON.stringify(s));
   assert.deepEqual(publicView(restored, "b", 500), publicView(s, "b", 500));
   assert.deepEqual(tick(restored, 8123), tick(s, 8123));
+});
+
+test("connected players and spectators change only their own avatar in every phase", () => {
+  let s = initial([person("a"), person("b"), person("watcher", null, { role: "spectator" })]);
+  s = act(s, "b", { type: "avatar", avatar: "🦊" });
+  s = act(s, "watcher", { type: "avatar", avatar: "🐸" });
+  assert.equal(s.players.find((p) => p.id === "a")!.avatar, undefined);
+  assert.equal(s.players.find((p) => p.id === "b")!.avatar, "🦊");
+  assert.equal(s.players.find((p) => p.id === "watcher")!.avatar, "🐸");
+  s = act(s, "a", { type: "start" });
+  s = startBlock(s, bundle("snapper"), 0);
+  s = act(s, "b", { type: "avatar", avatar: "🐙" });
+  s = act(s, "b", { type: "buzz" });
+  s = act(s, "b", { type: "avatar", avatar: "🐼" });
+  const deadline = publicView(s, "b", 0).deadline;
+  s = act(s, "a", { type: "pause" });
+  s = act(s, "watcher", { type: "avatar", avatar: "🌈" }, 100);
+  assert.equal(publicView(s, "b", 100).deadline, deadline);
+  s = act(s, "a", { type: "skip" }, 100);
+  s = act(s, "b", { type: "avatar", avatar: "🚀" }, 100);
+  assert.equal(s.phase, "reveal");
+  assert.equal(s.players.find((p) => p.id === "b")!.avatar, "🚀");
+  const bad = (actor: string, action: unknown) =>
+    transition(s, actor, action as GameAction, 100).error;
+  assert.ok(bad("unknown", { type: "avatar", avatar: "🦊" }));
+  assert.ok(bad("b", { type: "avatar", avatar: "<img>" }));
+  assert.ok(bad("b", { type: "avatar", avatar: "🦊", playerId: "a" }));
+  s = setConnected(s, "b", false, 100);
+  assert.ok(bad("b", { type: "avatar", avatar: "🦊" }));
+  s = act(s, "a", { type: "kick", playerId: "watcher" }, 100);
+  assert.ok(bad("watcher", { type: "avatar", avatar: "🦊" }));
+});
+
+test("only the owner renames session team labels without changing settings or scores", () => {
+  let s = start("snapper", [person("a", "A"), person("b", "B", { moderator: true })], {
+    mode: "teams",
+  });
+  s = answer(s, "a");
+  const config = structuredClone(s.config);
+  const scores = structuredClone(s.teamScores);
+  assert.ok(transition(s, "b", { type: "rename-team", team: "A", name: "Guests" }, 0).error);
+  s = act(s, "a", { type: "rename-team", team: "A", name: "  Blue Jays  " });
+  assert.deepEqual(publicView(s, "b", 0).teamNames, { A: "Blue Jays", B: "Team B" });
+  assert.deepEqual(s.config, config);
+  assert.equal(s.pendingConfig, null);
+  assert.deepEqual(s.teamScores, scores);
+  assert.equal(publicView(s, "b", 0).attempts[0]!.team, "A");
+  for (const name of ["", "   ", "x".repeat(25), "Blue\nJays", "Blue\u007fJays"])
+    assert.ok(transition(s, "a", { type: "rename-team", team: "A", name }, 0).error);
+  s = act(s, "a", { type: "spectate" });
+  s = act(s, "a", { type: "rename-team", team: "B", name: "Red Foxes" });
+  assert.equal(s.teamNames.B, "Red Foxes", "a connected spectating owner keeps authority");
+  s = setConnected(s, "a", false, 0);
+  assert.ok(transition(s, "a", { type: "rename-team", team: "A", name: "Away" }, 0).error);
+});
+
+test("reactions require a revealed question and an approved connected identity", () => {
+  let s = initial([person("a"), person("b"), person("watcher", null, { role: "spectator" })]);
+  const react = { type: "react", emoji: "😂" } as const;
+  assert.ok(transition(s, "b", react, 0).error);
+  s = act(s, "a", { type: "start" });
+  s = startBlock(s, bundle("snapper"), 0);
+  assert.ok(transition(s, "b", react, 0).error);
+  s = act(s, "b", { type: "buzz" });
+  assert.ok(transition(s, "watcher", react, 0).error);
+  s = act(s, "a", { type: "skip" });
+  s = act(s, "b", react);
+  s = act(s, "watcher", { type: "react", emoji: "👏" });
+  assert.deepEqual(
+    publicView(s, "a", 0).reactions.map(({ playerId, name, emoji, at }) => ({
+      playerId,
+      name,
+      emoji,
+      at,
+    })),
+    [
+      { playerId: "b", name: "B", emoji: "😂", at: 0 },
+      { playerId: "watcher", name: "WATCHER", emoji: "👏", at: 0 },
+    ],
+  );
+  assert.ok(transition(s, "unknown", react, 0).error);
+  assert.ok(transition(s, "a", { type: "react", emoji: "🚀" } as unknown as GameAction, 0).error);
+  s = setConnected(s, "b", false, 0);
+  assert.ok(transition(s, "b", react, 0).error);
+  s = act(s, "a", { type: "kick", playerId: "watcher" });
+  assert.ok(transition(s, "watcher", react, 0).error);
+  assert.deepEqual(
+    s.players.map((p) => p.score),
+    [0, 0, 0],
+  );
+  assert.deepEqual(s.teamScores, { A: 0, B: 0 });
+  assert.equal(s.question!.attempts.length, 0);
+});
+
+test("reaction cooldown survives reconnect and recovery, while the latest 64 leave timers and idle unchanged", () => {
+  let s = act(start("snapper"), "a", { type: "skip" });
+  const reaction = { type: "react", emoji: "😮" } as const;
+  const question = structuredClone(s.question);
+  const idle = s.lastActivity;
+  const deadline = nextDeadline(s);
+  assert.equal(publicView(s, "b", 0).reactionReadyAt, 0);
+  s = act(s, "b", reaction, 0);
+  assert.equal(publicView(s, "b", 0).reactionReadyAt, REACTION_COOLDOWN_MS);
+  assert.equal(publicView(s, "a", 0).reactionReadyAt, 0, "cooldown belongs to the viewing actor");
+  assert.ok(transition(s, "b", reaction, REACTION_COOLDOWN_MS - 1).error);
+  s = setConnected(s, "b", false, 1000);
+  s = setConnected(s, "b", true, 1001);
+  s = migrateSession(JSON.parse(JSON.stringify(s)) as Session, 1002);
+  assert.equal(publicView(s, "b", 1002).reactionReadyAt, REACTION_COOLDOWN_MS);
+  assert.ok(transition(s, "b", reaction, REACTION_COOLDOWN_MS - 1).error);
+  for (let index = 1; index <= 64; index++) s = act(s, "b", reaction, index * REACTION_COOLDOWN_MS);
+  assert.equal(s.reactions.length, 64);
+  assert.equal(s.reactions[0]!.at, REACTION_COOLDOWN_MS);
+  assert.equal(publicView(s, "b", 128_000).reactionReadyAt, 65 * REACTION_COOLDOWN_MS);
+  assert.equal(new Set(s.reactions.map((r) => r.id)).size, 64);
+  assert.deepEqual(s.question, question);
+  assert.equal(s.lastActivity, idle);
+  assert.equal(nextDeadline(s), deadline);
+  assert.deepEqual(
+    s.players.map((p) => p.score),
+    [0, 0],
+  );
+  s = act(s, "a", { type: "pause" }, 130_000);
+  s = act(s, "a", reaction, 130_001);
+  assert.deepEqual(s.pauses, ["manual"]);
+  assert.equal(s.pausedAt, 130_000);
+  assert.equal(s.lastActivity, idle);
+  s = act(s, "a", { type: "resume" }, 130_002);
+  // Social actions cannot keep an unattended session active.
+  s = act(s, "b", reaction, 730_001);
+  assert.equal(s.lastActivity, 130_002);
+  s = tick(s, 730_002);
+  assert.ok(s.pauses.includes("idle"));
+});
+
+test("question and waiting boundaries clear reactions; avatars and labels last only for this session", () => {
+  let s = start("open");
+  s = act(s, "b", { type: "avatar", avatar: "🎲" });
+  s = act(s, "a", { type: "rename-team", team: "B", name: "Brainstorm" });
+  s = act(s, "a", { type: "skip" });
+  s = act(s, "b", { type: "react", emoji: "💀" });
+  s = next(s, 1);
+  assert.equal(s.block!.index, 1);
+  assert.deepEqual(s.reactions, []);
+  assert.equal(publicView(s, "b", 1).reactionReadyAt, REACTION_COOLDOWN_MS);
+  s = act(s, "a", { type: "skip" }, 1);
+  assert.ok(transition(s, "b", { type: "react", emoji: "💀" }, 1).error);
+  s = act(s, "b", { type: "react", emoji: "💀" }, REACTION_COOLDOWN_MS);
+  s = act(s, "a", { type: "end-block" }, REACTION_COOLDOWN_MS);
+  assert.equal(s.phase, "waiting");
+  assert.deepEqual(s.reactions, []);
+  assert.equal(s.teamNames.B, "Brainstorm");
+  assert.equal(s.players.find((p) => p.id === "b")!.avatar, "🎲");
+  const fresh = createSession("new-session", person("a"), s.config, REACTION_COOLDOWN_MS);
+  assert.deepEqual(fresh.teamNames, DEFAULT_TEAM_NAMES);
+  assert.deepEqual(fresh.reactions, []);
+  assert.deepEqual(fresh.reactionAt, {});
+  assert.equal(publicView(fresh, "a", REACTION_COOLDOWN_MS).reactionReadyAt, 0);
+  assert.equal(fresh.players[0]!.avatar, undefined);
+});
+
+test("legacy session migration supplies social defaults once without changing current play", () => {
+  let s = answer(start("open"), "b", "blue", 100);
+  s = act(s, "a", { type: "pause" }, 200);
+  const legacy = structuredClone(s) as Session & {
+    teamNames?: Session["teamNames"];
+    reactions?: Session["reactions"];
+    reactionAt?: Session["reactionAt"];
+  };
+  Reflect.deleteProperty(legacy, "teamNames");
+  Reflect.deleteProperty(legacy, "reactions");
+  Reflect.deleteProperty(legacy, "reactionAt");
+  const migrated = migrateSession(legacy, 500);
+  assert.deepEqual(migrated.teamNames, DEFAULT_TEAM_NAMES);
+  assert.deepEqual(migrated.reactions, []);
+  assert.deepEqual(migrated.reactionAt, {});
+  assert.equal(migrated.players[0]!.avatar, undefined);
+  assert.deepEqual(migrated, { ...s, revision: s.revision + 1 });
+  assert.equal(migrateSession(migrated, 600), migrated, "migration is idempotent");
+  assert.equal("teamNames" in legacy, false, "the stored input snapshot is not mutated");
+});
+
+test("social projections are copied and cannot expose private answer material or cooldown state", () => {
+  let s = start("tossup", undefined, { wpm: 120 }, [
+    atom(0, {
+      text: "AAAA BBBB CCCC SECRET FUTURE WORDS",
+      answer: { canonical: "SECRET ANSWER", aliases: ["SECRET ALIAS"] },
+    }),
+  ]);
+  s = act(s, "b", { type: "avatar", avatar: "🦉" }, 200);
+  s = act(s, "a", { type: "rename-team", team: "A", name: "Owls" }, 300);
+  const view = publicView(s, "b", 500);
+  assert.equal(view.players.find((p) => p.id === "b")!.avatar, "🦉");
+  assert.equal(view.teamNames.A, "Owls");
+  assert.equal(JSON.stringify(view).includes("SECRET"), false);
+  assert.equal("reactionAt" in view, false);
+  view.teamNames.A = "Changed locally";
+  assert.equal(s.teamNames.A, "Owls");
+  s = act(s, "a", { type: "skip" }, 500);
+  s = act(s, "b", { type: "react", emoji: "👏" }, 500);
+  const revealed = publicView(s, "a", 500);
+  revealed.reactions[0]!.name = "Changed locally";
+  assert.equal(s.reactions[0]!.name, "B");
 });

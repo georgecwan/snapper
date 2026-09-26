@@ -692,6 +692,7 @@ export class Lobby extends DurableObject<Env> {
       const current = publicView(this.record.game, id.pid, actionNow);
       let message: string | undefined;
       const questionActions = [
+        "react",
         "buzz",
         "answer",
         "correct",
@@ -754,7 +755,9 @@ export class Lobby extends DurableObject<Env> {
     if (!this.record) return "The session ended.";
     const action = command.action;
     if (
-      ["approve", "reject", "close-session", "configure", "promote"].includes(action.type) &&
+      ["approve", "reject", "close-session", "configure", "promote", "rename-team"].includes(
+        action.type,
+      ) &&
       !actor.owner
     )
       return "Only the owner can do that.";

@@ -91,6 +91,11 @@ verification plan.
   moderator actions. T focuses chat for connected players and spectators,
   switching to the Chat panel on mobile. Suppress shortcuts during text input,
   composition, repeats, modifier combinations and open menus/dialogs.
+- Approved UX: animated current-question scoring/lead changes, reveal-only
+  reactions, a mobile score strip, session-only emoji avatars and owner-controlled
+  team names, and format/countdown cues. No streaks, session highlights or badges.
+  Keep reactions bounded and server-authorized; effects cannot change clocks,
+  scoring, eligibility or content visibility. Respect reduced motion.
 
 ## Working in this repository
 

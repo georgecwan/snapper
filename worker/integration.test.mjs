@@ -1045,3 +1045,180 @@ test(
     );
   },
 );
+
+test(
+  "session avatars, owner team labels and revealed-question reactions remain authoritative through recovery and cleanup",
+  { skip: !origin, timeout: 30_000 },
+  async (t) => {
+    assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname));
+    const clients = [];
+    const make = () => {
+      const client = new Client();
+      clients.push(client);
+      return client;
+    };
+    t.after(() => clients.forEach((client) => client.close()));
+    const owner = make();
+    const first = await owner.http("/status");
+    assert.equal(first.body.devAuth, true, "Only run against the local environment");
+    assert.equal((await owner.http("/dev-owner", {})).status, 200);
+    assert.equal((await owner.http("/open", { name: "Social owner" })).status, 200);
+    await owner.connect();
+    if (first.body.active) {
+      owner.send({ type: "close-session" });
+      await eventually(() => owner.messages.some((m) => m.type === "ended"), "clear prior session");
+      owner.close();
+      owner.state = null;
+      owner.messages = [];
+      await owner.http("/open", { name: "Social owner" });
+      await owner.connect();
+    }
+    const ack = async (client, action) => {
+      const result = await client.result(client.send(action));
+      assert.equal(result.type, "ack", `${action.type}: ${result.message ?? ""}`);
+    };
+    const rejected = async (client, action, pattern) => {
+      const result = await client.result(client.send(action));
+      assert.equal(result.type, "error");
+      assert.match(result.message, pattern);
+    };
+    await ack(owner, {
+      type: "configure",
+      config: {
+        ...owner.state.config,
+        mode: "ffa",
+        formats: ["open"],
+        categories: ["Canada"],
+        difficulty: "any",
+        source: "bundled",
+        shortProgressive: false,
+        autoAdvance: false,
+        graceMs: 30_000,
+      },
+    });
+    const savedConfig = (await owner.http("/status")).body.config;
+    const friend = make();
+    const spectator = make();
+    for (const [client, name, role] of [
+      [friend, "Social friend", "player"],
+      [spectator, "Social spectator", "spectator"],
+    ]) {
+      assert.equal((await client.http("/request", { name, role })).status, 200);
+      const pending = await eventually(
+        () => owner.state.pendingAdmissions.find((request) => request.name === name),
+        `${name} pending`,
+      );
+      await ack(owner, { type: "approve", requestId: pending.id });
+      await client.connect();
+    }
+    await ack(friend, { type: "avatar", avatar: "🦊" });
+    await ack(spectator, { type: "avatar", avatar: "🐸" });
+    await ack(owner, { type: "avatar", avatar: "🌈" });
+    const friendId = friend.state.selfId;
+    await ack(owner, { type: "promote", playerId: friendId, moderator: true });
+    await rejected(friend, { type: "rename-team", team: "A", name: "Guest label" }, /owner/);
+    await rejected(spectator, { type: "rename-team", team: "B", name: "Spectators" }, /owner/);
+    await ack(owner, { type: "rename-team", team: "A", name: "  Blue Jays  " });
+    await ack(owner, { type: "rename-team", team: "B", name: "Red Foxes" });
+    await eventually(
+      () =>
+        spectator.state.teamNames.A === "Blue Jays" && spectator.state.teamNames.B === "Red Foxes",
+      "owner labels reach the spectator immediately",
+    );
+    assert.equal(owner.state.players.find((p) => p.id === friendId).avatar, "🦊");
+    assert.equal(owner.state.players.find((p) => p.id === spectator.state.selfId).avatar, "🐸");
+    assert.deepEqual((await owner.http("/status")).body.config, savedConfig);
+    assert.equal(owner.state.pendingConfig, null);
+    await rejected(friend, { type: "react", emoji: "😂" }, /revealed/);
+    await ack(owner, { type: "start" });
+    await eventually(
+      () => [owner, friend, spectator].every((client) => client.state.phase === "reading"),
+      "authored Open block starts",
+    );
+    assert.equal(friend.state.question.answer, null);
+    assert.equal(spectator.state.question.answer, null);
+    await rejected(spectator, { type: "react", emoji: "😮" }, /revealed/);
+    const firstQuestion = owner.state.question.id;
+    assert.equal(friend.state.reactionReadyAt, 0);
+    await ack(owner, { type: "skip" });
+    await eventually(() => friend.state.phase === "reveal", "first question is revealed");
+    const revealDeadline = owner.state.deadline;
+    const sent = friend.send({ type: "react", emoji: "😂" });
+    assert.equal((await friend.result(sent)).type, "ack");
+    friend.socket.send(JSON.stringify(sent));
+    // A following command and snapshot establish that duplicate receipt delivery
+    // did not append a second reaction.
+    await ack(friend, { type: "avatar", avatar: "🦊" });
+    assert.equal(friend.state.reactions.filter((r) => r.playerId === friendId).length, 1);
+    await rejected(friend, { type: "react", emoji: "👏" }, /two seconds/);
+    await ack(spectator, { type: "react", emoji: "👏" });
+    await eventually(() => owner.state.reactions.length === 2, "both roles' reactions are shared");
+    assert.equal(owner.state.deadline, revealDeadline, "reactions do not extend reveal time");
+    assert.deepEqual(owner.state.teamScores, { A: 0, B: 0 });
+    assert.ok(owner.state.players.every((player) => player.score === 0));
+    assert.equal(owner.state.attempts.length, 0);
+    const reactions = structuredClone(owner.state.reactions);
+    assert.equal(friend.state.reactionReadyAt, reactions[0].at + 2000);
+    assert.equal(owner.state.reactionReadyAt, 0);
+    const replacement = make();
+    replacement.cookies = new Map(friend.cookies);
+    await replacement.connect();
+    await eventually(
+      () => friend.messages.some((m) => m.type === "replaced"),
+      "new tab takes over",
+    );
+    assert.equal(replacement.state.selfId, friendId);
+    assert.equal(replacement.state.players.find((p) => p.id === friendId).avatar, "🦊");
+    assert.deepEqual(replacement.state.teamNames, { A: "Blue Jays", B: "Red Foxes" });
+    assert.deepEqual(replacement.state.reactions, reactions);
+    assert.equal(replacement.state.reactionReadyAt, reactions[0].at + 2000);
+    await rejected(replacement, { type: "react", emoji: "💀" }, /two seconds/);
+    await sleep(Math.max(0, reactions[0].at + 2050 - Date.now()));
+    await ack(replacement, { type: "react", emoji: "💀" });
+    await ack(owner, { type: "next" });
+    assert.notEqual(owner.state.question.id, firstQuestion);
+    assert.deepEqual(owner.state.reactions, []);
+    assert.equal(owner.state.question.answer, null, "the next answer key stays private");
+    await ack(owner, { type: "skip" });
+    const stale = {
+      id: crypto.randomUUID(),
+      sessionId: owner.state.sessionId,
+      questionId: firstQuestion,
+      action: { type: "react", emoji: "😮" },
+    };
+    owner.socket.send(JSON.stringify(stale));
+    const staleResult = await owner.result(stale);
+    assert.equal(staleResult.type, "error");
+    assert.match(staleResult.message, /question has changed/);
+    assert.deepEqual(owner.state.reactions, []);
+    await ack(owner, { type: "pause" });
+    await ack(spectator, { type: "react", emoji: "😮" });
+    assert.equal(spectator.state.pausedReasons.length, 1, "a reaction cannot remove a hold");
+    await ack(owner, { type: "kick", playerId: friendId });
+    await eventually(
+      () => replacement.messages.some((m) => m.type === "ended"),
+      "removed guest loses access",
+    );
+    const revoked = make();
+    revoked.cookies = new Map(replacement.cookies);
+    await revoked.connect(403);
+    assert.deepEqual((await owner.http("/status")).body.config, savedConfig);
+    owner.send({ type: "close-session" });
+    await eventually(
+      () => spectator.messages.some((m) => m.type === "ended"),
+      "session cleanup notifies spectators",
+    );
+    owner.close();
+    owner.state = null;
+    owner.messages = [];
+    assert.equal((await owner.http("/open", { name: "New social session" })).status, 200);
+    await owner.connect();
+    assert.deepEqual(owner.state.teamNames, { A: "Team A", B: "Team B" });
+    assert.deepEqual(owner.state.reactions, []);
+    assert.equal(owner.state.players[0].avatar, undefined);
+    assert.equal(owner.state.reactionReadyAt, 0);
+    assert.deepEqual(owner.state.config, savedConfig, "only global settings survived cleanup");
+    owner.send({ type: "close-session" });
+    await eventually(() => owner.messages.some((m) => m.type === "ended"), "close the new session");
+  },
+);

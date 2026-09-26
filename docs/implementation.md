@@ -38,8 +38,8 @@ seat reservation once a disconnect is detected. The newest tab takes over
 atomically, so closing its predecessor does not release the replacement seat.
 
 The Durable Object stores `config` separately from `session`. The latter contains
-only current-session identity, chat, approvals, scores, question history and
-private content. It is deleted when the session closes or the final connected
+only current-session identity, chat, approvals, scores, question history, avatars,
+team names, reactions and private content. It is deleted when the session closes or the final connected
 player disappears. Spectators do not retain it. Provider recovery history may
 outlive live deletion, as approved by the owner.
 
@@ -57,6 +57,45 @@ freezes it; attempt changes, departure and connection replacement clear it.
 The input is also scoped to its connection and seat so reconnecting cannot
 republish an old guess. Socket projections update in message order before React
 renders them, keeping authority checks current even when renders are batched.
+
+## Play feedback and participant identity
+
+- `src/components/snapper/play-effects.tsx` and its CSS render the current winner,
+  awarded points, brief celebration, reveal reactions and format reminder.
+  `src/snapper/play-feedback.ts` derives feedback from the current public ruling
+  and applied points, including corrections and score resets. Team lead changes
+  use each attempt's original scoring team, not its player's current membership.
+  Reconnects do not replay the scoring celebration.
+- `src/components/snapper/community-extras.tsx` and its CSS contain animated score
+  values, the mobile score strip, avatar picker and owner team-name dialog.
+  `src/components/snapper/community.tsx` places these controls in the scoreboard
+  and displays avatars in the roster and chat. `src/snapper/identity.ts` derives
+  stable default avatars and colours from participant IDs, independently of rank.
+- `src/components/snapper/game.tsx` places feedback next to the question and uses
+  the existing server deadline for the automatic next-question countdown. The
+  mobile strip shows your score and the leader in FFA, or both named team totals;
+  spectators see the leaders. Format cues contain only public rules and points.
+  Reduced motion is respected. Effects do not delay progression or add sounds.
+
+Avatar, team-name and reaction changes use ordinary validated engine commands and
+authoritative snapshots. Connected approved players and spectators may choose
+only their own avatar. Only the verified owner may rename team labels; stable A/B
+IDs still govern membership and historical scoring. Both choices last for the
+session, survive reconnects and never write the saved configuration.
+
+Reactions require the currently revealed question and an active approved socket.
+The Worker rejects stale question IDs and retired/revoked connections. The engine
+enforces a two-second per-participant cooldown and keeps at most 64 reactions for
+the current question. `reactionReadyAt` projects the viewing participant's next
+allowed server time, so reconnects and fast advances retain the correct button
+state. New questions and waiting states clear the visible list; session cleanup
+also clears cooldowns. Reactions do not score, reset idle activity or alter clocks.
+`migrateSession` idempotently supplies defaults to older stored sessions while
+preserving current play and the existing legacy-format migration.
+
+No session highlights, streaks, badges or milestone awards are implemented. All
+feedback uses public current-question data; no future content or answer keys are
+added to client payloads.
 
 ## Development and build
 
@@ -212,6 +251,31 @@ Production OAuth, geographic latency and real Free-plan usage cannot be verified
 by the local emulator. No production deployment has been performed yet.
 
 ## Verification log
+
+Play feedback, reactions and participant identity, verified locally on 2026-09-26:
+
+- `npm test`: **154 passing unit tests**. Coverage includes social-action
+  permissions, avatar ownership, session-only names, reaction cooldown/bounds,
+  unchanged clocks and idle expiry, recovery/migration, question cleanup,
+  corrected scoring feedback, historical team attribution and stable identity.
+- `npm run test:integration`: **7 passing real Worker integration tests**.
+  The added WebSocket scenario covers players and spectators, owner-only naming,
+  shared avatars/reactions, duplicate receipts, cooldowns, tab recovery, stale
+  question rejection, removal and new-session defaults. Saved configuration is
+  unchanged by social actions and unrevealed answers remain private.
+- Frontend/Worker typechecking, scoped lint, the production build and Worker
+  packaging dry run pass. No production deployment was performed as part of
+  these checks.
+- Interactive desktop/mobile checks verified shared reactions and cooldowns,
+  animated points, ties and team lead changes, avatar selection and Escape/focus
+  restoration, long team names, mobile score navigation, automatic advancement
+  and paused countdowns. Reconnection preserves identity and scores without
+  replaying the celebration. Browser logs were clear; temporary settings were
+  restored and the test session ended.
+- Final development and built desktop/mobile smoke checks match, with visible
+  content, no horizontal overflow, console errors or brand/auth warnings. Both
+  viewport images were reviewed (`screenshots/snapper-social-dev*` and
+  `screenshots/snapper-social-built*`).
 
 Partial clarification, question variety and complete Shootout removal, verified
 locally on 2026-09-26:
