@@ -276,8 +276,15 @@ and corrections do not count as additional presented prompts.
 - Clearly distinguish waiting for approval, connecting, reconnecting, paused,
   full, exhausted content and temporarily unavailable service.
 - Host/moderator controls belong at the top to minimize scrolling. Action menus
-  close on outside click and Escape. P pauses/resumes and N advances when the
-  corresponding moderator action is allowed; shortcuts never fire during typing.
+  close on outside click and Escape. P pauses/resumes, N advances and S opens
+  the skip confirmation when the corresponding moderator action is allowed.
+  Skip remains available during a pause, but not while waiting, after reveal,
+  during an unresolved challenge or while disconnected.
+- T focuses the chat input for any connected player or spectator, including
+  while waiting, paused or resolving a challenge. On mobile it opens the Chat
+  panel first. It does not insert a T into the message. Shortcuts never fire
+  during typing, text composition, repeated key presses, modifier combinations
+  or while a menu/dialog is open.
 - Removing a player uses a named confirmation with explicit Cancel/Remove
   actions and reliable keyboard focus. Removal remains session-only and follows
   the existing owner/moderator permission rules.

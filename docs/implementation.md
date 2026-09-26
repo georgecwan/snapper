@@ -162,6 +162,19 @@ by the local emulator. No production deployment has been performed yet.
 
 ## Verification log
 
+Additional shortcuts, verified locally on 2026-09-26:
+
+- **S** opens the existing skip confirmation with the same moderator, connection,
+  phase and challenge checks as the button. **T** focuses chat for connected
+  participants and selects the Chat panel on mobile, without inserting a `t`.
+- All five shortcut tests pass, including typing, modifiers, repeat/composition,
+  disconnects, spectator chat and moderator permission boundaries. Typechecking,
+  scoped lint and the production build pass.
+- Interactive browser checks verified desktop/mobile chat focus, normal `s`/`t`
+  typing in chat, skip confirmation and dialog focus protection. Desktop/mobile
+  dev and built smoke checks match with no overflow or console errors; both
+  viewport screenshots were reviewed (`screenshots/snapper-shortcuts-*`).
+
 Question-bank and lobby-controls update, verified locally on 2026-09-26:
 
 - `npm test`: **90 passing tests**; frontend/Worker typechecking and scoped lint

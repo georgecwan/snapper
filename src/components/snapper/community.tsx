@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { ArrowRight, Check, Eye, MessageCircle, MoreHorizontal, Send, Trophy } from "lucide-react";
 import type { GameAction, PlayerView, SessionView } from "@/snapper/protocol";
 import type { Confirm } from "./game";
@@ -273,10 +273,12 @@ export function Chat({
   state,
   send,
   connected,
+  inputRef,
 }: {
   state: SessionView;
   send: SendAction;
   connected: boolean;
+  inputRef: RefObject<HTMLInputElement | null>;
 }) {
   const [text, setText] = useState("");
   const list = useRef<HTMLDivElement>(null);
@@ -345,6 +347,9 @@ export function Chat({
         </label>
         <input
           id="chat-input"
+          ref={inputRef}
+          title="Type in chat (T)"
+          aria-keyshortcuts="T"
           value={text}
           onChange={(event) => setText(event.target.value)}
           maxLength={500}
@@ -357,7 +362,7 @@ export function Chat({
           <Send size={17} />
         </button>
       </form>
-      <p className="chat-note">Everyone in the lobby can see this chat.</p>
+      <p className="chat-note">Everyone in the lobby can see this chat. Press T to type.</p>
     </>
   );
 }

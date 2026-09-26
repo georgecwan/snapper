@@ -67,7 +67,10 @@ verification plan.
 - No marketing copy or promotional landing page. This is a game for friends;
   show a direct functional lobby with plain action labels.
 - Keep host controls at the top, menus dismissible on outside click/Escape, and
-  P (pause/resume)/N (next) limited to permitted actions outside text input.
+  P (pause/resume), N (next) and S (skip confirmation) limited to permitted
+  moderator actions. T focuses chat for connected players and spectators,
+  switching to the Chat panel on mobile. Suppress shortcuts during text input,
+  composition, repeats, modifier combinations and open menus/dialogs.
 
 ## Working in this repository
 

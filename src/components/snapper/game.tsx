@@ -56,6 +56,8 @@ export function Game({
   const [submitted, setSubmitted] = useState(false);
   const [now, setNow] = useState(Date.now());
   const answerInput = useRef<HTMLInputElement>(null);
+  const chatInput = useRef<HTMLInputElement>(null);
+  const chatFocusRequested = useRef(false);
   const buzzZone = useRef<HTMLDivElement>(null);
   const [actionsHeight, setActionsHeight] = useState(180);
   const [keyboardInset, setKeyboardInset] = useState(0);
@@ -75,6 +77,19 @@ export function Game({
       send({ type: "buzz" });
     }
   }, [canBuzz, unlockSound, send]);
+  const skip = useCallback(() => {
+    if (!moderationActions(state, connected).skip) return;
+    confirm(
+      "Skip this question?",
+      "Reveal this answer and continue. This question stays in the session's seen history.",
+      () => send({ type: "skip" }),
+    );
+  }, [state, connected, confirm, send]);
+  useEffect(() => {
+    if (tab !== "chat" || !chatFocusRequested.current) return;
+    chatFocusRequested.current = false;
+    if (connected) chatInput.current?.focus();
+  }, [tab, connected]);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(timer);
@@ -128,17 +143,24 @@ export function Game({
       );
       const action = gameShortcut(
         event,
-        { ...moderationActions(state, connected), canBuzz },
+        { ...moderationActions(state, connected), canBuzz, canChat: connected },
         blocked,
       );
       if (!action) return;
       event.preventDefault();
       if (action === "buzz") buzz();
-      else send({ type: action });
+      else if (action === "skip") skip();
+      else if (action === "chat") {
+        if (tab === "chat") chatInput.current?.focus();
+        else {
+          chatFocusRequested.current = true;
+          setTab("chat");
+        }
+      } else send({ type: action });
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [buzz, canBuzz, connected, send, state]);
+  }, [buzz, canBuzz, connected, send, skip, state, tab]);
   const players = state.players.filter((player) => player.role === "player" && player.connected);
   const spectators = state.players.filter(
     (player) => player.role === "spectator" && player.connected,
@@ -194,7 +216,14 @@ export function Game({
         </div>
       </div>
       {state.canModerate && (
-        <Moderation state={state} self={self} send={send} connected={connected} confirm={confirm} />
+        <Moderation
+          state={state}
+          self={self}
+          send={send}
+          connected={connected}
+          confirm={confirm}
+          skip={skip}
+        />
       )}
       {state.pendingConfig && (
         <div className="pending-config">
@@ -498,7 +527,7 @@ export function Game({
             <Scoreboard state={state} self={self} send={send} confirm={confirm} />
           </section>
           <section className={`chat-panel mobile-panel ${tab === "chat" ? "mobile-active" : ""}`}>
-            <Chat state={state} send={send} connected={connected} />
+            <Chat state={state} send={send} connected={connected} inputRef={chatInput} />
           </section>
         </aside>
       </div>
@@ -627,12 +656,14 @@ function Moderation({
   send,
   connected,
   confirm,
+  skip,
 }: {
   state: SessionView;
   self?: PlayerView;
   send: (action: GameAction) => boolean;
   connected: boolean;
   confirm: Confirm;
+  skip: () => void;
 }) {
   const controls = moderationActions(state, connected);
   return (
@@ -677,19 +708,14 @@ function Moderation({
             </button>
             <button
               className="button secondary mini"
-              disabled={!connected || Boolean(state.challenge) || state.phase === "reveal"}
-              onClick={() =>
-                confirm(
-                  "Skip this question?",
-                  "Reveal this answer and continue. This question stays in the session's seen history.",
-                  () => {
-                    send({ type: "skip" });
-                  },
-                )
-              }
+              disabled={!controls.skip}
+              onClick={skip}
+              title="Skip question (S)"
+              aria-keyshortcuts="S"
             >
               <SkipForward size={15} />
               Skip
+              <kbd aria-hidden="true">S</kbd>
             </button>
             <button
               className="button quiet mini"

@@ -23,7 +23,11 @@ const press = (key: string, overrides = {}) => ({
 
 test("P pauses and resumes only when the moderator button is enabled", () => {
   assert.equal(
-    gameShortcut(event, { ...moderationActions(state, true), canBuzz: false }, false),
+    gameShortcut(
+      event,
+      { ...moderationActions(state, true), canBuzz: false, canChat: true },
+      false,
+    ),
     "pause",
   );
   assert.equal(
@@ -32,6 +36,7 @@ test("P pauses and resumes only when the moderator button is enabled", () => {
       {
         ...moderationActions({ ...state, pausedReasons: ["Paused by a moderator"] }, true),
         canBuzz: false,
+        canChat: true,
       },
       false,
     ),
@@ -43,13 +48,17 @@ test("P pauses and resumes only when the moderator button is enabled", () => {
     moderationActions({ ...state, phase: "waiting" }, true),
     moderationActions({ ...state, challenge: { playerId: "guest", name: "Guest" } }, true),
   ])
-    assert.equal(gameShortcut(event, { ...controls, canBuzz: true }, false), null);
+    assert.equal(gameShortcut(event, { ...controls, canBuzz: true, canChat: true }, false), null);
 });
 
 test("N advances only an unpaused reveal with moderator permission", () => {
   const reveal = { ...state, phase: "reveal" as const };
   assert.equal(
-    gameShortcut(press("n"), { ...moderationActions(reveal, true), canBuzz: false }, false),
+    gameShortcut(
+      press("n"),
+      { ...moderationActions(reveal, true), canBuzz: false, canChat: true },
+      false,
+    ),
     "next",
   );
   for (const controls of [
@@ -60,12 +69,74 @@ test("N advances only an unpaused reveal with moderator permission", () => {
     moderationActions({ ...reveal, canModerate: false }, true),
     moderationActions(reveal, false),
   ])
-    assert.equal(gameShortcut(press("n"), { ...controls, canBuzz: true }, false), null);
+    assert.equal(
+      gameShortcut(press("n"), { ...controls, canBuzz: true, canChat: true }, false),
+      null,
+    );
 });
 
-test("typing, dialogs, composition, repeated keys and modifier shortcuts never send game actions", () => {
-  const controls = { pause: "pause" as const, next: true, canBuzz: true };
-  for (const key of ["p", "n", " "]) {
+test("S requests skip only for connected moderators before reveal, including while paused", () => {
+  for (const phase of ["reading", "answering"] as const)
+    for (const pausedReasons of [[], ["Paused by a moderator"]]) {
+      const controls = moderationActions({ ...state, phase, pausedReasons }, true);
+      assert.equal(controls.skip, true);
+      assert.equal(
+        gameShortcut(press("s"), { ...controls, canBuzz: false, canChat: true }, false),
+        "skip",
+      );
+    }
+  for (const controls of [
+    moderationActions({ ...state, canModerate: false }, true),
+    moderationActions(state, false),
+    moderationActions({ ...state, phase: "waiting" }, true),
+    moderationActions({ ...state, phase: "reveal" }, true),
+    moderationActions({ ...state, challenge: { playerId: "guest", name: "Guest" } }, true),
+    moderationActions(
+      {
+        ...state,
+        pausedReasons: ["Answer challenged"],
+        challenge: { playerId: "guest", name: "Guest" },
+      },
+      true,
+    ),
+  ]) {
+    assert.equal(controls.skip, false);
+    assert.equal(
+      gameShortcut(press("s"), { ...controls, canBuzz: true, canChat: true }, false),
+      null,
+    );
+  }
+});
+
+test("T focuses chat for connected participants regardless of moderator permission or game holds", () => {
+  for (const connected of [false, true])
+    for (const canModerate of [false, true])
+      for (const phase of ["waiting", "reading", "answering", "reveal"] as const)
+        for (const pausedReasons of [[], ["Paused by a moderator"]])
+          for (const challenge of [null, { playerId: "guest", name: "Guest" }]) {
+            const controls = {
+              ...moderationActions({ canModerate, phase, pausedReasons, challenge }, connected),
+              // Chat is available to spectators and players without buzz eligibility.
+              canBuzz: false,
+              canChat: connected,
+            };
+            assert.equal(
+              gameShortcut(press("t"), controls, false),
+              connected ? "chat" : null,
+              `connected=${connected}, moderator=${canModerate}, phase=${phase}, paused=${pausedReasons.length > 0}, challenge=${Boolean(challenge)}`,
+            );
+          }
+});
+
+test("typing, dialogs, composition, repeated keys and modifier shortcuts never trigger actions", () => {
+  const controls = {
+    pause: "pause" as const,
+    next: true,
+    skip: true,
+    canBuzz: true,
+    canChat: true,
+  };
+  for (const key of ["p", "n", "s", "t", " "]) {
     const base = press(key, key === " " ? { code: "Space" } : {});
     assert.equal(gameShortcut(base, controls, true), null);
     for (const flag of [
@@ -81,5 +152,7 @@ test("typing, dialogs, composition, repeated keys and modifier shortcuts never s
   }
   assert.equal(gameShortcut(press(" ", { code: "Space" }), controls, false), "buzz");
   assert.equal(gameShortcut(press("P"), controls, false), "pause");
+  assert.equal(gameShortcut(press("S"), controls, false), "skip");
+  assert.equal(gameShortcut(press("T"), controls, false), "chat");
   assert.equal(gameShortcut(press("x"), controls, false), null);
 });
