@@ -142,14 +142,41 @@ function authPopupPlugin(): Plugin {
   };
 }
 
+/** The local signing key is public test data, so the proxy must stay loopback-only. */
+function snapperLocalApiPlugin(): Plugin {
+  const loopback = (address?: string) =>
+    address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+  return {
+    name: "snapper:local-api-boundary",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (request.url?.startsWith("/api/snapper") && !loopback(request.socket.remoteAddress)) {
+          response.writeHead(403, { "Content-Type": "application/json" });
+          response.end(
+            JSON.stringify({ error: "Local game controls require a loopback connection." }),
+          );
+          return;
+        }
+        next();
+      });
+      server.httpServer?.prependListener("upgrade", (request, socket) => {
+        if (request.url?.startsWith("/api/snapper") && !loopback(request.socket.remoteAddress))
+          socket.destroy();
+      });
+    },
+  };
+}
+
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
-export default defineConfig(({ command, isPreview }) => ({
+export default defineConfig(({ command, isPreview, mode }) => ({
   server: {
     host: "0.0.0.0",
     port: 8080,
     strictPort: true,
+    proxy: { "/api/snapper": { target: "http://127.0.0.1:8787", ws: true } },
   },
   preview: {
     host: "127.0.0.1",
@@ -157,17 +184,18 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  ...(mode === "snapper" ? { build: { outDir: "dist/snapper", emptyOutDir: true } } : {}),
   plugins: [
-    pgliteBootstrapPlugin(),
+    ...(mode === "snapper" ? [snapperLocalApiPlugin()] : []),
+    ...(mode === "snapper" ? [] : [pgliteBootstrapPlugin(), authPopupPlugin()]),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
-    authPopupPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
     appEnvPlugin(),
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
     grokPwaPlugin(),
     tailwindcss(),
-    tanstackStart(),
-    ...(command === "build" || isPreview
+    ...(mode === "snapper" ? [] : [tanstackStart()]),
+    ...(mode !== "snapper" && (command === "build" || isPreview)
       ? [
           nitro({
             preset: "vercel",

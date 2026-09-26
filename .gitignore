@@ -10,3 +10,5 @@ artifacts
 .env.*
 *.log
 .node_modules.lock
+.wrangler
+.dev.vars*

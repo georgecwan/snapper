@@ -1,18 +1,51 @@
-# Lectern
+# Snapper
 
-A private tossup room for friends. The question reads itself. Buzz in the moment you know — early answers are worth more.
+A shared trivia game for friends, inspired by Reach for the Top and Protobowl.
+One owner opens the lobby and approves guests. Up to 16 players and 16 spectators
+can join; games support free-for-all or two teams and eight text question formats.
 
-Practice alone, or open a room and share the code so others can join the same match.
+## Project context
 
-## Run locally
+- [Product design](docs/product-design.md): the approved rules and requirements.
+- [Implementation guide](docs/implementation.md): code map, content, checks and deployment setup.
+- [Cloudflare setup](docs/cloudflare-setup.md): account, free limits, owner sign-in and deployment steps.
+- [Architecture audit](docs/architecture-audit.md): historical prototype findings and hosting research.
+- [Agent instructions](AGENTS.project.md): constraints future coding sessions must preserve.
 
-```bash
-npm install
+## Develop and verify
+
+```sh
+npm ci
 npm run dev
+npm run typecheck
+npm run lint:snapper
+npm test
+npm run test:integration
+npm run build
+npm run check:worker
+npm run preview:restart
 ```
 
-The dev server listens on port 8080.
+Use Node.js 24 (`.nvmrc`). Development runs on port 8080 with a local Cloudflare emulator. The loopback-only
+owner button allows local testing without GitHub credentials. The production
+preview runs on 8081. `startup.sh` restarts development after a stopped session.
 
-## Stack
+`npm run check:browser` verifies desktop and mobile rendering and saves screenshots.
+On macOS it uses installed Chrome; elsewhere it uses Playwright Chromium.
+`npm run build:brand` regenerates app icons and share images from the SVG sources.
 
-React 19, TanStack Start, Vite, and Tailwind. Solo play stays in the browser. Multiplayer uses a short-lived room code.
+The active stack is static React/Vite plus a Cloudflare Worker and one SQLite
+Durable Object. The server owns timing, buzzing, judging, roles and private
+question content. The old Lectern/TanStack Start modules remain as legacy
+references and are not the Snapper runtime. Legacy template checks remain
+available under `npm run test:template`.
+
+## Deploy
+
+Production deployment has not been performed. It requires a **Cloudflare Workers
+Free** account and a GitHub OAuth application restricted to the owner's numeric
+GitHub ID. Use only the Free plan with enforced quotas; never enable paid overages
+or deploy the local development environment. Follow the configuration and secret
+setup in [the implementation guide](docs/implementation.md) before deployment.
+Pushing commits does not deploy the game. Automatic Vercel Git deployments are
+disabled because Vercel is no longer the target.
