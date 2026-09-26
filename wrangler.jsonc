@@ -3,6 +3,8 @@
   "name": "snapper",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-25",
+  // Keep production values entered in Settings > Variables and Secrets on Git deploys.
+  "keep_vars": true,
   "assets": {
     "directory": "./dist/snapper",
     "binding": "ASSETS",

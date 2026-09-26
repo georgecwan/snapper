@@ -5,6 +5,11 @@ Object for the live lobby and saved settings. No separate database subscription,
 Vercel project, paid domain or player accounts are needed. Deployment has not yet
 been performed; the local implementation and emulator are ready.
 
+**Recommended: connect GitHub in Cloudflare's dashboard.** Workers Builds can
+build and deploy `main` automatically, with no local Cloudflare login or terminal
+commands required. The GitHub deployment connection and Snapper's GitHub owner
+sign-in are separate one-time setups. [Cloudflare Git integration](https://developers.cloudflare.com/workers/ci-cd/builds/).
+
 ## Free limits
 
 Checked against Cloudflare's documentation on 2026-09-26:
@@ -30,6 +35,10 @@ The expected one-hour weekly game should fit these allowances. That is a plannin
 estimate, not a production measurement. Other apps in the account share limits.
 Review usage after the first game; if a limit is exhausted, wait for its reset.
 
+Automatic builds also have a Free allowance of **3,000 build minutes per month**,
+with one build at a time and a 20-minute timeout per build. Keep Workers Free;
+do not enable paid builds. [Build limits](https://developers.cloudflare.com/workers/ci-cd/builds/limits-and-pricing/).
+
 ## 1. Choose the account and address
 
 Create or sign in to a [Cloudflare account](https://dash.cloudflare.com/sign-up).
@@ -44,18 +53,35 @@ https://snapper.YOUR-SUBDOMAIN.workers.dev
 Cloudflare supplies this address for personal/hobby projects; a purchased domain
 is unnecessary. [Cloudflare address documentation](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
 
-Authorize the installed deployment tool from the repository:
+## 2. Connect GitHub and deploy the website
 
-```sh
-npx wrangler login
-npx wrangler whoami
-```
+In **Workers & Pages → Create application → Import a repository**, connect your
+GitHub account and select `georgecwan/snapper`. Choose a **Worker** application.
+The repo already defines the static website, API, Durable Object and migration.
 
-Sign in and approve Wrangler's authorization in the browser. If multiple accounts
-are available, set the intended account's ID as top-level `account_id` in
-`wrangler.jsonc`. These commands do not deploy the game.
+Use these settings:
 
-## 2. Register owner sign-in
+| Setting | Value |
+| --- | --- |
+| Worker name | `snapper` (must match `wrangler.jsonc`) |
+| Production branch | `main` |
+| Root directory | Repository root |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy --env ''` |
+| Node version | 24 (the repository includes `.nvmrc`) |
+| Builds for non-production branches | Disabled for this single-lobby product |
+
+Select **Save and Deploy**. Cloudflare installs dependencies and handles its
+deployment authorization. The first deployment can show the closed lobby before
+owner sign-in is configured; that is expected. Subsequent pushes to `main` deploy
+automatically once this connection is active.
+[Build configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/).
+
+For share-image metadata, add `VITE_PUBLIC_HOSTNAME` with the game's hostname
+(without `https://`) under **Settings → Builds → Build variables and secrets**.
+This is a public build setting; it is not needed for owner authentication.
+
+## 3. Register owner sign-in
 
 In GitHub, open **Settings → Developer settings → OAuth Apps → New OAuth App**.
 Use:
@@ -75,56 +101,28 @@ Obtain the owner's numeric GitHub `id` from their public profile API at
 `https://api.github.com/users/YOUR-GITHUB-USERNAME`. Use `id`, not `node_id` or
 the username. Do not infer the owner from the repository name.
 
-## 3. Configure production
+## 4. Add the runtime settings in Cloudflare
 
-Update the top-level `vars` in `wrangler.jsonc`, retaining all existing asset,
-Durable Object and migration configuration:
+Open **snapper → Settings → Variables and Secrets** and add:
 
-```json
-"vars": {
-  "ENVIRONMENT": "production",
-  "APP_ORIGIN": "https://snapper.YOUR-SUBDOMAIN.workers.dev",
-  "GITHUB_CLIENT_ID": "YOUR-OAUTH-CLIENT-ID",
-  "OWNER_GITHUB_ID": "YOUR-NUMERIC-GITHUB-ID"
-}
-```
+| Name | Type | Value |
+| --- | --- | --- |
+| `APP_ORIGIN` | Text | Exact HTTPS game origin, without a path |
+| `GITHUB_CLIENT_ID` | Text | OAuth app Client ID |
+| `OWNER_GITHUB_ID` | Text | Owner's numeric GitHub ID |
+| `GITHUB_CLIENT_SECRET` | Secret | OAuth app Client Secret |
+| `SESSION_SECRET` | Secret | Unique random value of at least 32 characters |
 
-These values are nonsecret. `APP_ORIGIN` must be the exact HTTPS origin, without
-a path. Store the two secrets separately with interactive prompts:
+Generate `SESSION_SECRET` in a password manager. Select **Deploy** to apply the
+settings. Do not copy the development key or set `DEV_AUTH` in production.
 
-```sh
-npx wrangler secret put GITHUB_CLIENT_SECRET --env ''
-npx wrangler secret put SESSION_SECRET --env ''
-```
-
-Use the OAuth Client Secret for the first value. Generate a unique random value
-of at least 32 characters in a password manager for `SESSION_SECRET`. Never use
-the checked-in development key. On first setup Wrangler may offer to create
-the named Worker for the secret; check the selected Free account and `snapper`
-name before continuing. **Never deploy the `local` environment.**
-
-## 4. Verify and deploy
-
-Using Node.js 24 from `.nvmrc`, install and check the code:
-
-```sh
-npm ci
-npm run typecheck
-npm run lint:snapper
-npm test
-npm run test:integration
-```
-
-Set the public hostname for share metadata and deploy the default production
-configuration:
-
-```sh
-VITE_PUBLIC_HOSTNAME=snapper.YOUR-SUBDOMAIN.workers.dev npm run deploy
-```
-
-Wrangler provisions the declared SQLite Durable Object. The game stays closed
-until owner sign-in succeeds and the owner opens a session. Git pushes do not
-deploy automatically; the retired Vercel integration is disabled in `vercel.json`.
+These are **runtime** settings, separate from the Build variables screen.
+The repository sets `keep_vars: true`, so later Git deployments preserve
+dashboard-entered text values; Wrangler also preserves secrets. Values explicitly
+declared in `wrangler.jsonc`, including `ENVIRONMENT`, remain controlled by the
+repository. No per-account edits to source files are required.
+[Dashboard secrets](https://developers.cloudflare.com/workers/configuration/secrets/#via-the-dashboard),
+[Variable persistence](https://developers.cloudflare.com/workers/wrangler/configuration/#source-of-truth).
 
 ## 5. Use the game and verify the live setup
 
@@ -138,3 +136,33 @@ player leaves, and that saved settings survive opening a new session. Review
 Workers and Durable Object usage in Cloudflare after that first game. These live
 checks remain outstanding until deployment; emulator success is not a claim that
 real OAuth, cross-country latency or provider quotas have been verified.
+
+The Vercel integration is disabled in `vercel.json`. Cloudflare auto-deployment
+starts only after connecting this repository in the Cloudflare dashboard.
+
+## Optional: manual deployment from a development machine
+
+The dashboard flow above needs none of these local commands. For an agent or
+developer deploying manually, use Node.js 24 and authorize Wrangler:
+
+```sh
+npm ci
+npx wrangler login
+npx wrangler whoami
+npm run typecheck
+npm run lint:snapper
+npm test
+npm run test:integration
+```
+
+If multiple accounts are available, set `CLOUDFLARE_ACCOUNT_ID` to the intended
+Free account. Use the runtime values/secrets already stored in the dashboard,
+then deploy the default production environment:
+
+```sh
+VITE_PUBLIC_HOSTNAME=snapper.YOUR-SUBDOMAIN.workers.dev npm run deploy
+```
+
+Wrangler provisions the declared SQLite Durable Object. The game stays closed
+until owner sign-in succeeds and the owner opens a session. **Never deploy the
+`local` environment.**

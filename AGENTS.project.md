@@ -12,7 +12,9 @@ verification plan.
   for entry points, verification results and outstanding deployment setup. The
   older Lectern modules are legacy references, not the active product.
 - `docs/cloudflare-setup.md` contains account setup, verified free quotas and
-  deployment steps. Git pushes do not deploy; Vercel Git deployments are disabled.
+  deployment steps. Cloudflare Workers Builds with GitHub is the preferred deploy
+  flow; once connected, pushes to `main` deploy automatically. No connection has
+  been configured by this agent. Vercel Git deployments are disabled.
 - All final gameplay defaults and progression rules have been approved. Continue
   implementation within that contract; do not restart requirements discovery.
   No production deployment has been made by this implementation session.

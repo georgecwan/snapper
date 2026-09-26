@@ -47,5 +47,8 @@ Free** account and a GitHub OAuth application restricted to the owner's numeric
 GitHub ID. Use only the Free plan with enforced quotas; never enable paid overages
 or deploy the local development environment. Follow the configuration and secret
 setup in [the implementation guide](docs/implementation.md) before deployment.
-Pushing commits does not deploy the game. Automatic Vercel Git deployments are
-disabled because Vercel is no longer the target.
+Connect this repository to **Cloudflare Workers Builds** for automatic deployment
+on pushes to `main`; the setup guide lists the exact dashboard settings. Runtime
+variables and secrets can be entered once in Cloudflare's dashboard and survive
+later deployments. No Cloudflare Git connection has been configured by this agent.
+Automatic Vercel Git deployments are disabled because Vercel is no longer the target.

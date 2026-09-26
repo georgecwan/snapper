@@ -71,8 +71,10 @@ The original Vite configuration's TanStack Start/Nitro path remains available as
 keeps the PWA/branding plugin, and does not initialize PostgreSQL or PGLite.
 The old `/api/rtc` route has been retired. Existing platform helpers remain intact.
 `vercel.json` disables automatic Git deployments to the retired Vercel target.
-Cloudflare deployment remains an explicit step; pushing commits does not deploy
-the game.
+Cloudflare Workers Builds is the preferred deployment flow: once the owner connects
+GitHub, pushes to `main` build and deploy automatically. The agent has not configured
+that account connection. `keep_vars: true` preserves dashboard-managed runtime
+values on subsequent deployments; secrets are also retained.
 
 ## Question content
 
@@ -107,22 +109,27 @@ on Free-plan enforced quotas, not on application rate limits. Recheck the linked
 provider terms in the audit before deploying. Rate limits and owner approval
 reduce unwanted use but rejected requests still consume some quota.
 
-1. Sign in with `npx wrangler login`, choose the intended Cloudflare **Workers
-   Free** account and Worker URL, and confirm the account has not enabled Workers
-   Paid. Use its free `workers.dev` address; a purchased domain is unnecessary.
+1. In a Cloudflare **Workers Free** account, import `georgecwan/snapper` from
+   GitHub as a Worker named `snapper`. Use production branch `main`, build command
+   `npm run build`, deploy command `npx wrangler deploy --env ''`, repository root,
+   Node.js 24, and disable non-production branch builds. The first deployment can
+   show the closed lobby before authentication is configured. Use the provided
+   `workers.dev` address; a purchased domain is unnecessary.
 2. Register a GitHub OAuth app for that URL with callback
    `/api/snapper/auth/github/callback`. Guests do not need GitHub accounts.
-3. Set these nonsecret values in the top-level `vars` of `wrangler.jsonc`:
+3. Set these text values under the Worker's **Settings → Variables and Secrets**:
    `APP_ORIGIN` to the exact HTTPS origin, `GITHUB_CLIENT_ID`,
    and `OWNER_GITHUB_ID` to the owner's immutable numeric GitHub account ID.
-4. Store `SESSION_SECRET` (at least 32 random characters) and
-   `GITHUB_CLIENT_SECRET` using `npx wrangler secret put SESSION_SECRET --env ''`
-   and `npx wrangler secret put GITHUB_CLIENT_SECRET --env ''`. Enter secret values
-   at the prompts, not as command-line arguments. Never commit real secrets or
+4. In the same runtime settings screen, add `SESSION_SECRET` (at least 32 random
+   characters) and `GITHUB_CLIENT_SECRET` with type **Secret**, then deploy the
+   settings. Never commit real secrets or
    copy the local development secret into production.
-5. Set `VITE_PUBLIC_HOSTNAME` to the production hostname for absolute share-image
-   metadata in the retained PWA plugin. Build, run the checks, then deploy the default production environment with
-   `npm run deploy`. **Never deploy `--env local`.**
+5. Set `VITE_PUBLIC_HOSTNAME` under **Settings → Builds → Build variables and
+   secrets** to the production hostname for absolute share-image metadata. Build
+   variables do not configure runtime authentication. Future `main` pushes deploy
+   automatically. Manual `npm run deploy` remains available to an authenticated
+   developer, but local Wrangler login is unnecessary for the dashboard flow.
+   **Never deploy `--env local`.**
 6. Verify the real GitHub redirect, owner allowlist, two remote browsers, WebSocket
    reconnects, cleanup and provider fetches on the deployed origin.
 
