@@ -1123,15 +1123,39 @@ a svg {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 15px;
-  margin: 13px 0;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #e1cc88;
+  border-radius: 11px;
+  background: #fff7dc;
 }
 .question-actions > span {
   font-size: 11px;
-  color: #686975;
+  color: #6d5426;
 }
-.question-actions .text-link {
+.challenge-button {
+  min-height: 44px;
+  padding: 9px 12px;
+  background: #fff;
+  border: 1px solid #b99436;
+  color: #674600;
+}
+.challenge-button:hover:not(:disabled) {
+  background: #fff0b6;
+  border-color: #88630f;
+}
+.challenge-button kbd {
+  padding: 2px 5px;
+  border: 1px solid #dbcba5;
+  border-radius: 4px;
+  background: #fff9e9;
   font-size: 11px;
+}
+.challenge-pending .challenge-button:disabled {
+  opacity: 1;
+  color: #6d5426;
 }
 .spectator-actions {
   display: flex;
@@ -2558,8 +2582,8 @@ summary::-webkit-details-marker {
   .question-actions > span {
     font-size: 11px;
   }
-  .question-actions .text-link {
-    font-size: 11px;
+  .question-actions .challenge-button {
+    font-size: 12px;
   }
   .answer-reveal {
     padding: 17px;

@@ -22,7 +22,25 @@ type ShortcutEvent = Pick<
   | "shiftKey"
   | "defaultPrevented"
 >;
-type Controls = ReturnType<typeof moderationActions> & { canBuzz: boolean; canChat: boolean };
+type Controls = ReturnType<typeof moderationActions> & {
+  canBuzz: boolean;
+  canChat: boolean;
+  canChallenge?: boolean;
+};
+
+/** Space belongs to gameplay even when buzzing is unavailable or the key is held. */
+export function reservesGameSpace(event: ShortcutEvent, blocked: boolean) {
+  return (
+    !blocked &&
+    !event.defaultPrevented &&
+    !event.isComposing &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    (event.code === "Space" || event.key === " ")
+  );
+}
 
 /** Resolve only actions currently enabled by the corresponding game controls. */
 export function gameShortcut(event: ShortcutEvent, controls: Controls, blocked: boolean) {
@@ -37,10 +55,11 @@ export function gameShortcut(event: ShortcutEvent, controls: Controls, blocked: 
     event.shiftKey
   )
     return null;
-  if (event.code === "Space" && controls.canBuzz) return "buzz" as const;
+  if (reservesGameSpace(event, blocked) && controls.canBuzz) return "buzz" as const;
   if (event.key.toLowerCase() === "p") return controls.pause;
   if (event.key.toLowerCase() === "n" && controls.next) return "next" as const;
   if (event.key.toLowerCase() === "s" && controls.skip) return "skip" as const;
   if (event.key.toLowerCase() === "t" && controls.canChat) return "chat" as const;
+  if (event.key.toLowerCase() === "c" && controls.canChallenge) return "challenge" as const;
   return null;
 }

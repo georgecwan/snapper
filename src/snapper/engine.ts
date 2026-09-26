@@ -958,6 +958,7 @@ export function transition(
       state.started = true;
       state.lastActivity = now;
       clearPause(state, "idle", now);
+      clearPause(state, "manual", now);
       waitingState(state, now);
       break;
     case "pause":

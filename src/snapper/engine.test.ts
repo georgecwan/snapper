@@ -477,6 +477,30 @@ test("idle pause is explicit and requires a moderator to resume", () => {
   assert.equal(s.pauses.length, 0);
 });
 
+test("a moderator can explicitly start after ending a paused block without clearing seen history", () => {
+  let s = start("snapper");
+  const seen = [...s.usedIds];
+  s = act(s, "a", { type: "pause" }, 100);
+  s = act(s, "a", { type: "end-block" }, 200);
+  assert.equal(s.phase, "waiting");
+  assert.deepEqual(s.pauses, ["manual"], "ending a block does not implicitly resume play");
+  assert.equal(s.needsBlock, false);
+  const refused = transition(s, "b", { type: "start" }, 300);
+  assert.equal(refused.error, "A moderator is required.");
+  assert.equal(refused.state, s);
+  assert.deepEqual(s.pauses, ["manual"]);
+  s = act(s, "a", { type: "start" }, 400);
+  assert.deepEqual(s.pauses, []);
+  assert.equal(s.needsBlock, true);
+  assert.deepEqual(s.usedIds, seen);
+  assert.equal(startBlock(s, bundle("snapper"), 400), s, "the previous question stays excluded");
+  s = startBlock(s, bundle("snapper", [atom(99)]), 400);
+  assert.equal(s.phase, "reading");
+  assert.equal(s.question!.atom.id, "q-99");
+  assert.deepEqual(s.usedIds, [...seen, "q-99"]);
+  assert.equal(publicView(s, "b", 400).canBuzz, true);
+});
+
 test("team-dependent formats require two nonempty teams; FFA excludes scramble", () => {
   const teams = initial([person("a", "A")], { mode: "teams" });
   assert.ok(!readyFormats(teams).some((format) => ["team", "assigned"].includes(format)));

@@ -87,10 +87,20 @@ verification plan.
 - No marketing copy or promotional landing page. This is a game for friends;
   show a direct functional lobby with plain action labels.
 - Keep host controls at the top, menus dismissible on outside click/Escape, and
-  P (pause/resume), N (next) and S (skip confirmation) limited to permitted
-  moderator actions. T focuses chat for connected players and spectators,
+  P (pause/resume), N (next) and S (skip) limited to permitted
+  moderator actions. C challenges when the current-question button is enabled.
+  T focuses chat for connected players and spectators,
   switching to the Chat panel on mobile. Suppress shortcuts during text input,
   composition, repeats, modifier combinations and open menus/dialogs.
+- Bare Space never scrolls the gameplay page, even when the participant cannot
+  buzz or holds the key. Typing and native focused controls keep their normal
+  behavior. Skip (including S) and End block act immediately without confirmation.
+- Challenge is prominent beside the game controls, including on mobile. The
+  header Help menu contains gameplay basics, shortcuts, sound meanings and
+  question formats; do not restore the tiny formats footer link. Sounds are
+  distinct local cues for your/another player's buzz, correct/incorrect answers,
+  clarification, answer timeout and a new question. Preserve mute preferences,
+  gesture unlock and silence on reconnect/unmute rather than replaying old events.
 - Approved UX: animated current-question scoring/lead changes, reveal-only
   reactions, a mobile score strip, session-only emoji avatars and owner-controlled
   team names, and format/countdown cues. No streaks, session highlights or badges.

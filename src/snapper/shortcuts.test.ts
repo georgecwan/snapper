@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gameShortcut, moderationActions } from "./shortcuts.ts";
+import { gameShortcut, moderationActions, reservesGameSpace } from "./shortcuts.ts";
 
 const state = { canModerate: true, phase: "reading" as const, pausedReasons: [], challenge: null };
 const event = {
@@ -19,6 +19,72 @@ const press = (key: string, overrides = {}) => ({
   key,
   code: `Key${key.toUpperCase()}`,
   ...overrides,
+});
+
+test("Space never falls through to page scrolling when a participant cannot buzz", () => {
+  const space = press(" ", { code: "Space" });
+  for (const connected of [false, true])
+    for (const phase of ["waiting", "reading", "answering", "reveal"] as const)
+      for (const pausedReasons of [[], ["Paused"]]) {
+        const controls = {
+          ...moderationActions({ ...state, phase, pausedReasons }, connected),
+          // Includes spectators, lockouts, and another player's answer window.
+          canBuzz: false,
+          canChat: connected,
+        };
+        assert.equal(gameShortcut(space, controls, false), null);
+        assert.equal(reservesGameSpace(space, false), true);
+      }
+});
+
+test("holding Space consumes repeats without buzzing again", () => {
+  const controls = { ...moderationActions(state, true), canBuzz: true, canChat: true };
+  const space = press(" ", { code: "Space" });
+  assert.equal(gameShortcut(space, controls, false), "buzz");
+  assert.equal(reservesGameSpace(space, false), true);
+  assert.equal(gameShortcut({ ...space, repeat: true }, controls, false), null);
+  assert.equal(reservesGameSpace({ ...space, repeat: true }, false), true);
+  assert.equal(reservesGameSpace({ ...space, code: "" }, false), true);
+});
+
+test("reserved Space preserves typing, native controls, overlays and modified shortcuts", () => {
+  const space = press(" ", { code: "Space" });
+  assert.equal(reservesGameSpace(space, true), false);
+  for (const flag of [
+    "defaultPrevented",
+    "isComposing",
+    "altKey",
+    "ctrlKey",
+    "metaKey",
+    "shiftKey",
+  ] as const)
+    assert.equal(reservesGameSpace({ ...space, [flag]: true }, false), false, flag);
+  assert.equal(reservesGameSpace(press("p"), false), false);
+});
+
+test("C challenges only when the current-question Challenge button is available", () => {
+  const c = press("c");
+  const controls = { ...moderationActions(state, false), canBuzz: false, canChat: true };
+  // A connected spectator may challenge even without buzz/moderator permission.
+  assert.equal(gameShortcut(c, { ...controls, canChallenge: true }, false), "challenge");
+  assert.equal(gameShortcut(press("C"), { ...controls, canChallenge: true }, false), "challenge");
+  assert.equal(gameShortcut(c, { ...controls, canChallenge: false }, false), null);
+  assert.equal(gameShortcut(c, controls, false), null);
+  assert.equal(gameShortcut(c, { ...controls, canChallenge: true }, true), null);
+  for (const flag of [
+    "defaultPrevented",
+    "isComposing",
+    "repeat",
+    "altKey",
+    "ctrlKey",
+    "metaKey",
+    "shiftKey",
+  ] as const)
+    assert.equal(
+      gameShortcut({ ...c, [flag]: true }, { ...controls, canChallenge: true }, false),
+      null,
+      flag,
+    );
 });
 
 test("P pauses and resumes only when the moderator button is enabled", () => {

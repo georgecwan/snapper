@@ -29,7 +29,7 @@ import {
   type SessionView,
 } from "@/snapper/protocol";
 import type { SessionController } from "@/snapper/use-session";
-import { gameShortcut, moderationActions } from "@/snapper/shortcuts";
+import { gameShortcut, moderationActions, reservesGameSpace } from "@/snapper/shortcuts";
 import { Chat, Scoreboard, SeatButtons } from "./community";
 import { MobileScoreStrip } from "./community-extras";
 import { FormatCue, Reactions, ScoringMoment } from "./play-effects";
@@ -81,6 +81,7 @@ export function Game({
     paused = state.pausedReasons.length > 0;
   const canBuzz = state.canBuzz && connected && !paused,
     canAnswer = state.canAnswer && connected && !paused;
+  const canChallenge = Boolean(question && connected && !state.challenge && state.attempts.length);
   const currentAnswerer = state.players.find((player) => player.id === state.answererId);
   const lastAttempt = state.attempts.at(-1);
   const needsElaboration =
@@ -100,12 +101,8 @@ export function Game({
   }, [canBuzz, unlockSound, send]);
   const skip = useCallback(() => {
     if (!moderationActions(state, connected).skip) return;
-    confirm(
-      "Skip this question?",
-      "Reveal this answer and continue. This question stays in the session's seen history.",
-      () => send({ type: "skip" }),
-    );
-  }, [state, connected, confirm, send]);
+    send({ type: "skip" });
+  }, [state, connected, send]);
   useEffect(() => {
     if (tab !== "chat" || !chatFocusRequested.current) return;
     chatFocusRequested.current = false;
@@ -168,11 +165,13 @@ export function Game({
       );
       const action = gameShortcut(
         event,
-        { ...moderationActions(state, connected), canBuzz, canChat: connected },
+        { ...moderationActions(state, connected), canBuzz, canChat: connected, canChallenge },
         blocked,
       );
+      // Resolve the action before preventing default: held/ineligible Space still
+      // belongs to the game, but must never dispatch an extra buzz.
+      if (action || reservesGameSpace(event, blocked)) event.preventDefault();
       if (!action) return;
-      event.preventDefault();
       if (action === "buzz") buzz();
       else if (action === "skip") skip();
       else if (action === "chat") {
@@ -185,7 +184,7 @@ export function Game({
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [buzz, canBuzz, connected, send, skip, state, tab]);
+  }, [buzz, canBuzz, canChallenge, connected, send, skip, state, tab]);
   const players = state.players.filter((player) => player.role === "player" && player.connected);
   const spectators = state.players.filter(
     (player) => player.role === "spectator" && player.connected,
@@ -486,6 +485,24 @@ export function Game({
               connected={connected}
               now={now + session.clockOffset}
             />
+            {question && state.attempts.length > 0 && (
+              <div className={`question-actions${state.challenge ? " challenge-pending" : ""}`}>
+                <button
+                  className="button challenge-button"
+                  disabled={!canChallenge}
+                  onClick={() => send({ type: "challenge" })}
+                  title="Challenge the current ruling (C)"
+                  aria-keyshortcuts="C"
+                >
+                  <Flag size={18} />
+                  {state.challenge ? "Challenge pending" : "Challenge a ruling"}
+                  <kbd aria-hidden="true">C</kbd>
+                </button>
+                <span>
+                  {state.challenge ? "Waiting for a moderator" : "Pauses play for review"}
+                </span>
+              </div>
+            )}
             {self?.role === "spectator" ? (
               <div className="spectator-actions">
                 <span>
@@ -586,19 +603,6 @@ export function Game({
               </>
             ) : null}
           </div>
-          {question && (
-            <div className="question-actions">
-              <button
-                className="text-link subtle"
-                disabled={Boolean(state.challenge) || !connected || !state.attempts.length}
-                onClick={() => send({ type: "challenge" })}
-              >
-                <Flag size={15} />
-                {state.challenge ? "Challenge pending" : "Challenge a ruling"}
-              </button>
-              <span>Current question only.</span>
-            </div>
-          )}
           {state.attempts.length > 0 && <Attempts state={state} send={send} confirm={confirm} />}
         </section>
         <aside className="side-column">
@@ -807,15 +811,7 @@ function Moderation({
             <button
               className="button quiet mini"
               disabled={!connected}
-              onClick={() =>
-                confirm(
-                  "End this format block?",
-                  "Finish the current block and move to the next playable format. Current question rulings become final when play advances.",
-                  () => {
-                    send({ type: "end-block" });
-                  },
-                )
-              }
+              onClick={() => send({ type: "end-block" })}
             >
               End block
             </button>

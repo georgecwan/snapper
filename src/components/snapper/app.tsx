@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useId,
   useRef,
@@ -27,8 +26,10 @@ import {
 } from "lucide-react";
 import { FORMAT_LABELS, FORMATS, type RoomConfig } from "@/snapper/protocol";
 import { useSession, type SessionController } from "@/snapper/use-session";
+import { useSound } from "@/snapper/use-sound";
 import { ConfigPanel } from "./config-panel";
 import { Game, type Confirm } from "./game";
+import { HelpMenu } from "./help";
 
 export const FORMAT_DESCRIPTIONS = {
   tossup: "Progressive clues. A correct answer before the power mark earns bonus points.",
@@ -121,73 +122,9 @@ export function Modal({
   );
 }
 
-function useSound() {
-  const [muted, setMuted] = useState(true);
-  const audio = useRef<AudioContext | null>(null);
-  useEffect(() => {
-    try {
-      setMuted(localStorage.getItem("snapper-muted") !== "false");
-    } catch {
-      /* Optional preference. */
-    }
-    return () => {
-      void audio.current?.close();
-    };
-  }, []);
-  const unlock = useCallback(() => {
-    try {
-      audio.current ??= new AudioContext();
-      if (audio.current.state === "suspended") void audio.current.resume();
-    } catch {
-      /* Audio is optional. */
-    }
-  }, []);
-  const play = useCallback(
-    (kind: "buzz" | "accept" | "reject") => {
-      if (muted || !audio.current || audio.current.state !== "running") return;
-      try {
-        const ctx = audio.current,
-          osc = ctx.createOscillator(),
-          gain = ctx.createGain();
-        osc.type = kind === "buzz" ? "triangle" : "sine";
-        osc.frequency.setValueAtTime(
-          kind === "accept" ? 660 : kind === "reject" ? 180 : 330,
-          ctx.currentTime,
-        );
-        osc.frequency.exponentialRampToValueAtTime(
-          kind === "accept" ? 880 : kind === "reject" ? 100 : 220,
-          ctx.currentTime + 0.14,
-        );
-        gain.gain.setValueAtTime(0.045, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.21);
-      } catch {
-        /* Sound must never interrupt play. */
-      }
-    },
-    [muted],
-  );
-  const toggle = () => {
-    unlock();
-    setMuted((current) => {
-      try {
-        localStorage.setItem("snapper-muted", String(!current));
-      } catch {
-        /* Optional preference. */
-      }
-      return !current;
-    });
-  };
-  return { muted, toggle, play, unlock };
-}
-
 export function SnapperApp() {
   const session = useSession(),
-    sound = useSound();
-  const playSound = sound.play;
+    sound = useSound(session.view, session.connection === "connected");
   const [authError, setAuthError] = useState<string | null>(null);
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -211,27 +148,6 @@ export function SnapperApp() {
   const cancelConfirmation = useRef<HTMLButtonElement>(null);
   const confirmationDescription = useId();
   const self = session.view?.players.find((player) => player.id === session.view?.selfId);
-  const observed = useRef<{
-    questionId: string;
-    answerer: string | null;
-    attemptIds: Set<string>;
-  } | null>(null);
-  useEffect(() => {
-    const state = session.view;
-    if (!state?.question) return;
-    const previous = observed.current;
-    if (previous?.questionId === state.question.id) {
-      if (state.answererId && state.answererId !== previous.answerer) playSound("buzz");
-      for (const attempt of state.attempts)
-        if (!previous.attemptIds.has(attempt.id) && attempt.verdict !== "prompt")
-          playSound(attempt.verdict);
-    }
-    observed.current = {
-      questionId: state.question.id,
-      answerer: state.answererId,
-      attemptIds: new Set(state.attempts.map((item) => item.id)),
-    };
-  }, [session.view, playSound]);
   const confirm: Confirm = (title, text, action, label = "Confirm") => {
     const active = document.activeElement;
     const returnFocus =
@@ -300,6 +216,7 @@ export function SnapperApp() {
                 <LogOut size={19} />
               </button>
             )}
+            <HelpMenu onFormats={() => setPanel("formats")} />
           </nav>
         </div>
       </header>
@@ -324,11 +241,6 @@ export function SnapperApp() {
       ) : (
         <Landing session={session} />
       )}
-      <footer className="site-footer">
-        <button onClick={() => setPanel("formats")}>
-          Question formats <ArrowRight size={13} />
-        </button>
-      </footer>
       {panel === "rules" && config && (
         <Modal
           title={self?.owner ? "Lobby settings" : "Lobby rules"}

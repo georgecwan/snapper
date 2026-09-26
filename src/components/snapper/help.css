@@ -1,0 +1,185 @@
+.help-menu-container {
+  flex-shrink: 0;
+}
+.help-menu {
+  position: relative;
+}
+.help-menu > .help-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  list-style: none;
+  color: #535662;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+}
+.help-menu > .help-menu-trigger:hover,
+.help-menu[open] > .help-menu-trigger {
+  color: var(--ink);
+  background: #ebecea;
+}
+.help-menu > .help-menu-trigger:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+.help-menu > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 30;
+  width: min(230px, calc(100vw - 32px));
+  padding: 5px;
+  border: 1px solid #dddfea;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 10px 30px #242b531c;
+}
+.help-menu > div > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 10px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.help-menu > div > button:hover {
+  background: #f3f4fb;
+}
+.help-menu > div > button > svg {
+  flex-shrink: 0;
+  color: var(--blue);
+}
+.help-content {
+  font-size: 13px;
+  line-height: 1.65;
+}
+.help-content h3 {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.help-content p,
+.help-content dd {
+  color: var(--muted);
+}
+.help-content p + p {
+  margin-top: 8px;
+}
+.help-content .help-intro {
+  margin-bottom: 22px;
+}
+.help-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.help-sections h3 {
+  margin-bottom: 6px;
+}
+.help-content .help-subheading {
+  margin: 24px 0 14px;
+}
+.help-shortcuts,
+.help-sounds {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin: 0;
+}
+.help-shortcuts > div {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+}
+.help-shortcuts kbd {
+  display: inline-block;
+  min-width: 30px;
+  padding: 3px 7px;
+  border: 1px solid #dfe2ec;
+  border-bottom-width: 3px;
+  border-radius: 6px;
+  background: #f8f9fc;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+.help-shortcuts dd,
+.help-sounds dd {
+  margin: 0;
+}
+.help-sounds dt {
+  font-weight: 650;
+}
+.help-sounds dd {
+  margin-top: 2px;
+}
+.snap-modal:has(.help-content) .modal-head .icon-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+@media (max-width: 600px) {
+  .site-header:has(.help-menu) .header-center {
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  .site-header:has(.help-menu) .header-inner {
+    padding-inline: 16px;
+  }
+  .site-header:has(.help-menu) .header-actions {
+    flex-shrink: 0;
+  }
+  .site-header:has(.help-menu) .header-actions .icon-button,
+  .site-header:has(.help-menu) .rules-button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+  .help-menu > .help-menu-trigger {
+    width: 44px;
+    padding: 10px;
+  }
+  .help-menu-trigger > span,
+  .help-menu-trigger > .help-menu-chevron {
+    display: none;
+  }
+  .snap-modal:has(.help-content) .modal-head {
+    gap: 8px;
+    padding: 14px 16px;
+  }
+  .snap-modal:has(.help-content) .modal-head h2 {
+    font-size: 21px;
+  }
+  .snap-modal:has(.help-content) .modal-body {
+    padding: 20px;
+  }
+}
+@media (max-width: 360px) {
+  .site-header:has(.help-menu) .header-inner {
+    gap: 4px;
+    padding-inline: 10px;
+  }
+  .site-header:has(.help-menu) .brand {
+    gap: 5px;
+    font-size: 22px;
+  }
+  .site-header:has(.help-menu) .brand-mark {
+    width: 26px;
+    height: 29px;
+  }
+}

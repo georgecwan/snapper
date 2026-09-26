@@ -97,6 +97,28 @@ No session highlights, streaks, badges or milestone awards are implemented. All
 feedback uses public current-question data; no future content or answer keys are
 added to client payloads.
 
+## Keyboard controls, Help and sound
+
+- `src/snapper/shortcuts.ts` shares current permission/phase gates with the game
+  buttons. Bare Space suppresses page scrolling even while buzzing is unavailable
+  or the key repeats. Editable fields, native controls, modifiers, composition
+  and open menus/dialogs retain their normal behavior. C challenges the current
+  ruling; P/N/S remain moderator-only, and T focuses chat.
+- Skip/S and End block execute immediately; their old confirmations are removed.
+  Other destructive actions keep their confirmations. Explicit Start clears a
+  moderator's manual pause after ending a paused block; End block itself still
+  preserves that pause until the moderator starts play again.
+- `src/components/snapper/help.tsx` provides the top Help menu: gameplay basics,
+  formats, shortcuts and sound meanings. It uses the shared dismissible menu and
+  modal components. The former Question formats footer is removed. Challenge is
+  a prominent button beside the gameplay controls, including the fixed mobile bar.
+- `src/snapper/sounds.ts` detects new public game events and defines seven short
+  Web Audio motifs: your buzz, another player's buzz, correct, incorrect, prompt,
+  timeout and a new question. `use-sound.ts` manages trusted-gesture unlocking,
+  browser-local mute preferences and audio cleanup. Reconnects, first snapshots,
+  unmuting and unchanged score recalculations do not replay past sounds. Muting
+  stops scheduled and active notes; no external assets or services are used.
+
 ## Development and build
 
 Use Node.js 24 (the version in `.nvmrc`); Node.js 22.18 or newer is required.
@@ -252,6 +274,27 @@ by the local emulator. No production deployment has been performed yet.
 
 ## Verification log
 
+Keyboard controls, Help and distinct sounds, verified locally on 2026-09-26:
+
+- `npm test`: **169 passing tests**, including ineligible/held Space, C permission
+  and input guards, sound-event transitions and reconnect/unmute baselines, and
+  restarting after ending a paused block without clearing question history.
+- Frontend/Worker typechecking, scoped lint, production build and Worker
+  packaging dry run pass. No production deployment was performed by these checks.
+- Two-player browser checks confirm that Space cannot scroll during another
+  player's answer, while spaces/C still type normally in chat. Eligible Space
+  buzzes and focuses the answer field. C pauses for a challenge; S and End block
+  act without dialogs. Native focused controls still respond normally to Space.
+  Pause → End block → Start starts a fresh playable question in the real browser.
+- Desktop/mobile review covered the prominent Challenge control, the Help
+  menu's viewport bounds, outside-click/Escape dismissal, focus restoration,
+  format/shortcut/sound guides and prompt/correct-answer flow with sound enabled.
+  A temporary development reload error while files were being added was resolved;
+  fresh dev and built smoke checks show no console/page errors or overflow.
+- Development and built desktop/mobile verdicts match, with both viewport images
+  reviewed (`screenshots/snapper-controls-dev*` and `snapper-controls-built*`).
+  Temporary local test sessions were ended. No production room settings changed.
+
 Play feedback, reactions and participant identity, verified locally on 2026-09-26:
 
 - `npm test`: **154 passing unit tests**. Coverage includes social-action
@@ -341,7 +384,8 @@ Live answer drafts, verified locally on 2026-09-26:
   no overflow and no console/brand/auth warnings. Both viewport images were
   reviewed (`screenshots/snapper-live-draft-dev*` and `snapper-live-draft-built*`).
 
-Additional shortcuts, verified locally on 2026-09-26:
+Additional shortcuts, verified locally on 2026-09-26 (the Skip confirmation below
+is superseded by the immediate controls update):
 
 - **S** opens the existing skip confirmation with the same moderator, connection,
   phase and challenge checks as the button. **T** focuses chat for connected

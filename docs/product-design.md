@@ -296,18 +296,25 @@ odds.
   not guide this redesign.
 - Public text chat shared by admitted players and spectators. No private/team
   chat, in-app voice or video is part of the selected scope.
-- Optional sound effects for buzz/correct/incorrect outcomes, with individual
-  mute control and a remembered browser preference.
+- Optional, distinct sound effects for your confirmed buzz, another player's
+  buzz, correct and incorrect answers, clarification, answer timeout and the
+  next question. Use brief motifs with different rhythms and tones, an individual
+  mute control and the existing remembered browser preference. Muting stops
+  active sounds; reconnecting or enabling audio must not replay old events.
 - Prioritize question readability and mobile typing. Keep the question,
   eligibility, answer field and deadline usable with the phone keyboard open.
 - Keyboard buzzing must respect focused inputs and buttons. Do not announce
   every progressive character or live answer keystroke through a screen reader
   or convey eligibility solely through color. Respect reduced-motion preferences.
+- Reserve bare Space on the gameplay page even while ineligible, spectating,
+  paused or reconnecting, so it never scrolls the page. Holding it must not
+  trigger another buzz; spaces in inputs and native control activation still work.
 - Clearly distinguish waiting for approval, connecting, reconnecting, paused,
   full, exhausted content and temporarily unavailable service.
 - Host/moderator controls belong at the top to minimize scrolling. Action menus
-  close on outside click and Escape. P pauses/resumes, N advances and S opens
-  the skip confirmation when the corresponding moderator action is allowed.
+  close on outside click and Escape. P pauses/resumes, N advances and S skips
+  when the corresponding moderator action is allowed. Skip and End block act
+  immediately without confirmation, superseding the earlier confirmation flow.
   Skip remains available during a pause, but not while waiting, after reveal,
   during an unresolved challenge or while disconnected.
 - T focuses the chat input for any connected player or spectator, including
@@ -315,6 +322,13 @@ odds.
   panel first. It does not insert a T into the message. Shortcuts never fire
   during typing, text composition, repeated key presses, modifier combinations
   or while a menu/dialog is open.
+- C triggers Challenge when a ruling exists for the current question and no
+  challenge is already pending. It uses the button's connection and eligibility
+  checks, including for spectators. Make Challenge a prominent button beside the
+  gameplay controls, reachable on phones; it pauses play for moderator review.
+- Put Question formats in a top Help menu alongside How to play, Keyboard
+  shortcuts and Sounds. Remove the old bottom formats link. Help is available
+  before joining as well as during play and dismisses with outside click/Escape.
 - Removing a player uses a named confirmation with explicit Cancel/Remove
   actions and reliable keyboard focus. Removal remains session-only and follows
   the existing owner/moderator permission rules.
