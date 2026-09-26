@@ -3,6 +3,7 @@ import {
   addParticipant,
   configureSession,
   createSession,
+  migrateSession,
   nextDeadline,
   publicView,
   readyFormats,
@@ -99,6 +100,13 @@ export class Lobby extends DurableObject<Env> {
       const parsed = configSchema.safeParse(savedConfig);
       if (parsed.success) this.config = parsed.data;
       this.record = (await ctx.storage.get<SessionRecord>("session")) ?? null;
+      if (this.record) {
+        const migrated = migrateSession(this.record.game, Date.now());
+        if (migrated !== this.record.game) {
+          this.record.game = migrated;
+          await this.save();
+        }
+      }
       // A restart can interrupt the gap between replacing/deleting an identity and
       // closing its socket. Never keep a socket outside the recovered session alive.
       for (const ws of ctx.getWebSockets()) {
@@ -267,6 +275,7 @@ export class Lobby extends DurableObject<Env> {
         fetch,
         Math.random,
         this.questionPacks.select,
+        this.questionPacks.counts,
       );
       if (this.record?.game.id !== sid) return changed;
       if (result.bundle) {

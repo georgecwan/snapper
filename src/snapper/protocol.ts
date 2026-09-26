@@ -8,16 +8,14 @@ export const FORMATS = [
   "team",
   "assigned",
   "clues",
-  "shootout",
 ] as const;
 export type Format = (typeof FORMATS)[number];
-/** Older FFA settings used Shootout; its short questions now play as ordinary Snappers. */
-export function normalizeFormats(mode: "ffa" | "teams", formats: readonly Format[]): Format[] {
-  return [
-    ...new Set(
-      formats.map((format) => (mode === "ffa" && format === "shootout" ? "snapper" : format)),
-    ),
-  ];
+/** Accept old saved selections without retaining the removed format. */
+export function normalizeFormats(
+  _mode: "ffa" | "teams",
+  formats: readonly (Format | "shootout")[],
+): Format[] {
+  return [...new Set(formats.map((format) => (format === "shootout" ? "snapper" : format)))];
 }
 export const FORMAT_LABELS: Record<Format, string> = {
   tossup: "Tossup",
@@ -27,7 +25,6 @@ export const FORMAT_LABELS: Record<Format, string> = {
   team: "Team scramble",
   assigned: "Assigned",
   clues: "Who / What am I?",
-  shootout: "Shootout",
 };
 export type Team = "A" | "B";
 export const CATEGORIES = [
@@ -50,7 +47,7 @@ export const configSchema = z
   .object({
     mode: z.enum(["ffa", "teams"]),
     formats: z
-      .array(z.enum(FORMATS))
+      .array(z.enum([...FORMATS, "shootout"]))
       .min(1)
       .max(8)
       .refine((v) => new Set(v).size === v.length),

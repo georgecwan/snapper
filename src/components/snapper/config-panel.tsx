@@ -121,7 +121,8 @@ export function ConfigPanel({ config, editable, onSave, pending }: Props) {
       <fieldset disabled={!editable}>
         <legend>The question mix</legend>
         <p className="field-hint">
-          Each new block picks a playable format at random. Formats may repeat; questions do not.
+          Formats with more matching questions appear more often. Questions do not repeat within a
+          session.
         </p>
         <div className="option-grid">
           {FORMATS.map((format) => (
@@ -132,10 +133,7 @@ export function ConfigPanel({ config, editable, onSave, pending }: Props) {
               <input
                 type="checkbox"
                 checked={draft.formats.includes(format)}
-                disabled={
-                  (format === "shootout" && draft.mode === "ffa") ||
-                  (draft.formats.length === 1 && draft.formats.includes(format))
-                }
+                disabled={draft.formats.length === 1 && draft.formats.includes(format)}
                 onChange={(event) =>
                   update(
                     "formats",
@@ -147,7 +145,7 @@ export function ConfigPanel({ config, editable, onSave, pending }: Props) {
               />
               <span>
                 {FORMAT_LABELS[format]}
-                {(format === "team" || format === "shootout") && <small>Two teams required</small>}
+                {format === "team" && <small>Two teams required</small>}
               </span>
               <Check size={15} aria-hidden="true" />
             </label>

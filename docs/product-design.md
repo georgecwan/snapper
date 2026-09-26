@@ -105,7 +105,7 @@ spending boundary.
   not bypass the next-question/fixed-block eligibility rule or the eight-player
   team limit.
 - Late joiners answer starting with the next question. For roster-dependent
-  blocks, including Assigned and Shootout, late joins and team changes wait
+  blocks, including Assigned and scramble/bonuses, late joins and team changes wait
   until the block ends. Reconnection retains the existing identity/eligibility.
 - Freeze starting rosters for these blocks independently of occupied lobby
   seats. A disconnect frees a seat but does not remove an unscored block member
@@ -132,12 +132,18 @@ and seen-question history remain in the same session; switching modes must not
 make previously used questions eligible again.
 
 An individual question is one prompt/scoring opportunity. A block groups linked
-questions under a format, such as an Assigned round or a Shootout. A long
+questions under a format, such as an Assigned round or scramble/bonuses. A long
 tossup or standalone Snapper can be a one-question block.
 
-- Choose enabled, currently playable formats **independently at random** at
-  block boundaries. Consecutive repeats of a format are allowed; do not use a
-  shuffled cycle instead.
+- Choose enabled, currently playable formats **independently at random, weighted
+  by matching question inventory**, at block boundaries. A format with more
+  questions under the saved filters appears more often. Consecutive repeats are
+  allowed; do not use a shuffled cycle. This supersedes uniform format choice.
+  Weight formats, not subject categories. Assigned uses the short-question pool;
+  grouped formats count eligible question parts. Imported inventory comes from
+  manifest counts rather than scanning every question or querying live services.
+  These are matching inventory estimates, not exact remaining unseen counts;
+  exhausted formats are still skipped by the normal no-repeat selection.
 - Within a selected format and the saved filters, sample the eligible unseen
   repository questions fairly, without preferring early entries or depleted
   groups. A new lobby draws afresh; do not reuse a fixed opening sequence or
@@ -170,8 +176,15 @@ tossup or standalone Snapper can be a one-question block.
   disconnection/removal, tab takeover and question end. A pause freezes the
   existing draft; editing resumes in the same answer window after the pause.
   A participant joining during an answer sees the latest valid draft.
-- Where the answer rules support it, an insufficiently specific answer gets
-  one clarification attempt with a fresh **8-second** timer.
+- An insufficiently specific answer gets one clarification attempt with a fresh
+  **8-second** timer. Authored prompt aliases and conservative complete-word
+  partials qualify: **1970** for **January 1, 1970** prompts for the full answer.
+  Correct ordered sequence prefixes or correctly positioned partial names can
+  also prompt. This awards no points and reveals no missing answer details.
+  Explicit rejections take precedence; accepted aliases still count as correct.
+  Wrong extra words, negations, digit/word fragments and wrong sequence order do
+  not qualify. A second incomplete response is incorrect. Show a clear prompt
+  beside the answer field and focus the new answer window.
 - Standard answer window: **8 seconds**. Sequence answer window: **20 seconds**.
   These values are configurable.
 - A wrong answer or timeout on ordinary buzzer questions locks that player out
@@ -192,12 +205,12 @@ manual play waits until a moderator is connected.
 
 The earliest submission now judged correct becomes the winner; later scoring
 for that question is undone. Recompute score and eligibility effects from the
-question's starting state, including Shootout retirement and cycle changes.
+question's starting state.
 Once an answer is revealed, correction must not reopen it for more attempts.
 After the next question starts, the prior ruling is final: no late score
 adjustments or cascading rewinds.
 
-## Eight text formats
+## Seven text formats
 
 These are Snapper house rules, not a promise of exact official Reach rules.
 Scores and timing are configurable by the owner.
@@ -211,15 +224,18 @@ Scores and timing are configurable by the owner.
 | Team scramble/bonuses | 10-point scramble, followed by three exclusive 10-point bonuses. First winning-team member to buzz gets its one attempt. No opposing steals. Team-dependent, so unavailable in FFA. |
 | Assigned | 10 points. Assigned player answers first; a wrong answer/timeout gives one designated opponent an attempt. In FFA, use the next player in the rotating order. |
 | Four-clue Who/What Am I | Four clues worth 40/30/20/10. One player/team attempt per clue, with eligibility reset for the next clue. |
-| Shootout (teams only) | 10 per correct answer; that player sits out until eligible under the cycle rules below. |
 
 Use meaningful individual adaptations in FFA and disable inherently
-team-dependent formats. Shootout is no longer available in FFA: those short
-questions remain in the normal Snapper pool, without retiring a player after
-scoring. Existing FFA settings that include Shootout map it to Snapper once,
-including configurations that enabled only Shootout. New blocks enforce this
-rule; an already-running block retains its rules until it ends. A one-player
-Assigned game cannot pass an answer back to the same player as an opponent.
+team-dependent formats. A one-player Assigned game cannot pass an answer back
+to the same player as an opponent.
+
+**Shootout is removed from both modes.** This supersedes its earlier team-only
+status and all player-retirement/cycle rules. Reuse those short questions as
+ordinary Snappers and in Assigned rounds. Legacy settings map Shootout to one
+Snapper entry, even if Shootout was the only enabled format. A stored active
+Shootout converts to Snapper and ends after its current question, retaining
+attempts, scores and answer-window identities. Unasked tail questions return to
+the available pool; no presented question becomes repeatable.
 
 ### Equal opportunities for unequal teams
 
@@ -231,26 +247,21 @@ The opposing attempt uses a designated rotating opponent. Freeze the schedule
 for the block; do not replace a disconnected player's turn with a stronger
 teammate.
 
-**Team Shootout:** each team can score `N` times. A player who scores retires
-for that cycle. Smaller-team players become eligible again only after every
-member of their frozen roster has scored in that cycle, and only while their
-team has scoring capacity left. End when **both teams** have used their
-allocation, or after `max(12, 4 × N)` presented prompts.
-
-For three versus five players, each team gets five Assigned primary turns and
-up to five Shootout successes, with a twenty-prompt Shootout cap. This provides
-equal primary allocations and team scoring ceilings, not equal individual turns
-or winning odds.
-
-**Superseded FFA Shootout:** the earlier player-retirement format and
-`max(12, 2 × starting player count)` block limit have been removed from FFA.
-Team Shootouts retain their prompt limits; reconnection, answer attempts and
-corrections do not count as additional presented prompts.
+For three versus five players, each team gets five Assigned primary turns.
+This provides equal primary allocations, not equal individual turns or winning
+odds.
 
 ## Question sourcing and fallback
 
-- Prefer free retrieval of questions, with suitable questions bundled in the
-  repository whenever a live source is unavailable or lacks a format.
+- Mixed sourcing gives local and live content an equal chance to be tried first
+  for Tossup, Snapper and Assigned blocks, then falls back to the other source if
+  needed. This supersedes live-first priority: a working provider must not starve
+  the much larger repository bank. Bundled-only mode never calls live providers;
+  authored-only formats continue using suitable repository content. Preserve
+  filters and session deduplication across both sources.
+- A temporary pack-manifest failure may use the original fallback, but must not
+  permanently disable imported questions. Retry on a later selection after a
+  one-minute cooldown; do not poll or repeatedly retry during the cooldown.
 - The meaning of “new” remains explicitly undecided. Do not assume current-news
   generation or add a paid AI dependency.
 - Maintain curated packs in the repository. No in-game editor or pack upload.
@@ -260,7 +271,7 @@ corrections do not count as additional presented prompts.
 - If an enabled format has no unseen compatible content, temporarily skip it.
   Pause if none remains. Preserve saved filters and the no-repeat rule.
 - Do not silently change language, topic or difficulty to fill an empty pool.
-- Free APIs do not cover all eight formats ready to play. The repository pack
+- Free APIs do not cover all seven formats ready to play. The repository pack
   supplies authored sequences, four-clue items and related groups; future pack
   expansion remains repository content work.
 - Preserve source identity, author/packet information where supplied, rights
@@ -330,7 +341,7 @@ The owner approved these during the implementation handoff; do not ask again:
 - FFA Assigned gives each player one primary turn.
 - An unanswered scramble skips its bonuses. Freeze the entire scramble/bonus
   roster for the block.
-- Require two nonempty teams for team Assigned, team Shootout and scramble with
+- Require two nonempty teams for team Assigned and scramble with
   bonuses; temporarily skip these otherwise without changing saved settings.
 - Manual Next stays restricted to moderators. With none present, manual play
   waits even though automatic advancement may finish the current block.

@@ -79,6 +79,11 @@ export function Game({
   const canBuzz = state.canBuzz && connected && !paused,
     canAnswer = state.canAnswer && connected && !paused;
   const currentAnswerer = state.players.find((player) => player.id === state.answererId);
+  const lastAttempt = state.attempts.at(-1);
+  const needsElaboration =
+    state.phase === "answering" &&
+    lastAttempt?.verdict === "prompt" &&
+    lastAttempt.playerId === state.answererId;
   const seconds = state.deadline
     ? Math.max(0, (state.deadline - now - session.clockOffset) / 1000)
     : null;
@@ -123,7 +128,7 @@ export function Game({
     setTab("game");
     const frame = requestAnimationFrame(() => answerInput.current?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
-  }, [canAnswer, submitted]);
+  }, [canAnswer, submitted, inputWindowId]);
   useEffect(() => {
     const element = buzzZone.current;
     if (!element) return;
@@ -193,7 +198,9 @@ export function Game({
       : paused
         ? "The game is paused."
         : canAnswer
-          ? "Type your answer."
+          ? needsElaboration
+            ? "Enter your full answer."
+            : "Type your answer."
           : state.phase === "answering"
             ? `${currentAnswerer?.name ?? "A player"} has the buzzer.`
             : state.phase === "reveal"
@@ -482,6 +489,14 @@ export function Game({
                 )}
                 {state.phase === "answering" && state.answererId === self?.id && (
                   <p className="answer-visibility">The lobby can see what you type.</p>
+                )}
+                {needsElaboration && state.answererId === self?.id && (
+                  <p className="answer-prompt" role="status">
+                    <CircleHelp size={19} aria-hidden="true" />
+                    <span>
+                      <strong>Prompt: be more specific.</strong> Enter the full answer.
+                    </span>
+                  </p>
                 )}
                 <form
                   className={`answer-form ${canAnswer ? "is-answering" : ""}`}

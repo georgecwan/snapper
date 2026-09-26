@@ -808,7 +808,7 @@ test(
 );
 
 test(
-  "legacy FFA Shootout settings persist as independent nonrepeating Snappers",
+  "legacy Shootout settings in both modes normalize to independent nonrepeating Snappers",
   { skip: !origin, timeout: 30_000 },
   async (t) => {
     assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname));
@@ -861,8 +861,8 @@ test(
     );
     assert.deepEqual(
       (await owner.http("/status")).body.config.formats,
-      ["shootout"],
-      "Team Shootout remains a saved selectable format",
+      ["snapper"],
+      "Legacy team Shootout settings also normalize to Snapper",
     );
     assert.equal((await owner.http("/config", { config })).status, 200);
     assert.deepEqual((await owner.http("/status")).body.config.formats, ["snapper"]);
@@ -909,5 +909,139 @@ test(
     assert.equal(owner.state.block.format, "snapper");
     assert.equal(owner.state.block.count, 1);
     await close();
+  },
+);
+
+test(
+  "an incomplete ordered answer gets one fresh clarification window without scoring or leaking the key",
+  { skip: !origin, timeout: 30_000 },
+  async (t) => {
+    assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname));
+    const owner = new Client();
+    const friend = new Client();
+    const spectator = new Client();
+    t.after(() => [owner, friend, spectator].forEach((client) => client.close()));
+    const first = await owner.http("/status");
+    assert.equal(first.body.devAuth, true, "Only run against the local environment");
+    assert.equal((await owner.http("/dev-owner", {})).status, 200);
+    assert.equal((await owner.http("/open", { name: "Sequence owner" })).status, 200);
+    await owner.connect();
+    if (first.body.active) {
+      owner.send({ type: "close-session" });
+      await eventually(() => owner.messages.some((m) => m.type === "ended"), "clear prior session");
+      owner.close();
+      owner.state = null;
+      owner.messages = [];
+      await owner.http("/open", { name: "Sequence owner" });
+      await owner.connect();
+    }
+    const ack = async (client, action) => {
+      const result = await client.result(client.send(action));
+      assert.equal(result.type, "ack", `${action.type}: ${result.message ?? ""}`);
+    };
+    await ack(owner, {
+      type: "configure",
+      config: {
+        ...owner.state.config,
+        mode: "ffa",
+        source: "bundled",
+        formats: ["sequence"],
+        categories: ["Canada"],
+        difficulty: "any",
+        shortProgressive: false,
+        autoAdvance: false,
+        sequenceMs: 20_000,
+        graceMs: 30_000,
+        points: { ...owner.state.config.points, sequence: 20 },
+      },
+    });
+    for (const [client, name, role] of [
+      [friend, "Sequence answerer", "player"],
+      [spectator, "Sequence spectator", "spectator"],
+    ]) {
+      assert.equal((await client.http("/request", { name, role })).status, 200);
+      const pending = await eventually(
+        () => owner.state.pendingAdmissions.find((request) => request.name === name),
+        `${name} pending`,
+      );
+      await ack(owner, { type: "approve", requestId: pending.id });
+      await client.connect();
+    }
+    await ack(owner, { type: "start" });
+    await eventually(() => friend.state.canBuzz, "the authored Canada sequence starts");
+    assert.equal(friend.state.block.format, "sequence");
+    assert.match(friend.state.question.text, /three prairie provinces from west to east/);
+    await ack(friend, { type: "buzz" });
+    await eventually(
+      () => spectator.state.answererId === friend.state.selfId,
+      "spectator observes the initial answer window",
+    );
+    const questionId = friend.state.question.id;
+    const initialWindow = friend.state.answerWindowId;
+    const initialDeadline = friend.state.deadline;
+    friend.draft("Alberta");
+    await eventually(
+      () => owner.state.answerDraft === "Alberta" && spectator.state.answerDraft === "Alberta",
+      "the incomplete unsubmitted draft is visible",
+    );
+    assert.equal(owner.state.attempts.length, 0);
+    const submittedAt = Date.now();
+    await ack(friend, { type: "answer", text: "Alberta" });
+    await eventually(
+      () =>
+        [owner, friend, spectator].every(
+          (client) => client.state.attempts[0]?.verdict === "prompt",
+        ),
+      "all participants receive the clarification ruling",
+    );
+    for (const client of [owner, friend, spectator]) {
+      assert.equal(client.state.phase, "answering");
+      assert.equal(client.state.question.id, questionId);
+      assert.equal(client.state.answererId, friend.state.selfId);
+      assert.ok(client.state.answerWindowId);
+      assert.notEqual(client.state.answerWindowId, initialWindow);
+      assert.equal(client.state.attempts.length, 1);
+      assert.equal(client.state.attempts[0].answer, "Alberta");
+      assert.equal(client.state.attempts[0].points, 0);
+      assert.ok(client.state.players.every((player) => player.score === 0));
+      assert.deepEqual(client.state.teamScores, { A: 0, B: 0 });
+      assert.equal(client.state.question.answer, null);
+      assert.equal(client.state.question.provenance, null);
+      assert.doesNotMatch(JSON.stringify(client.state), /Saskatchewan|Manitoba/);
+      assert.equal(client.state.answerDraft, "", "clarification clears the previous draft");
+      assert.ok(client.state.deadline >= submittedAt + 8000);
+      assert.ok(client.state.deadline <= Date.now() + 8000);
+      assert.ok(
+        client.state.deadline < initialDeadline,
+        "the fresh timer is eight, not twenty seconds",
+      );
+    }
+    assert.equal(friend.state.canAnswer, true);
+    assert.equal(owner.state.canAnswer, false);
+    assert.equal(spectator.state.canAnswer, false);
+    await ack(friend, { type: "answer", text: "Alberta, Saskatchewan, Manitoba" });
+    await eventually(
+      () => [owner, friend, spectator].every((client) => client.state.phase === "reveal"),
+      "the completed sequence is accepted",
+    );
+    for (const client of [owner, friend, spectator]) {
+      assert.deepEqual(
+        client.state.attempts.map((attempt) => attempt.verdict),
+        ["prompt", "accept"],
+      );
+      assert.equal(client.state.attempts[1].points, 20);
+      assert.equal(
+        client.state.players.find((player) => player.id === friend.state.selfId).score,
+        20,
+      );
+      assert.equal(client.state.answerWindowId, null);
+      assert.equal(client.state.answerDraft, "");
+      assert.match(client.state.question.answer, /Alberta.*Saskatchewan.*Manitoba/);
+    }
+    owner.send({ type: "close-session" });
+    await eventually(
+      () => spectator.messages.some((message) => message.type === "ended"),
+      "sequence clarification session closes",
+    );
   },
 );

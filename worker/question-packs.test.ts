@@ -18,7 +18,7 @@ function question(n: number, changes: Partial<QuestionAtom> = {}): QuestionAtom 
   };
 }
 
-function fixture(shards: QuestionAtom[][], format = "tossup") {
+function fixture(shards: QuestionAtom[][], format = "tossup", now?: () => number) {
   const files = new Map<string, unknown>();
   const paths = shards.map((_, i) => `${format}/science/medium/shard-${i}.json`);
   const index = `${format}/science/medium/index.json`;
@@ -49,7 +49,7 @@ function fixture(shards: QuestionAtom[][], format = "tossup") {
         : new Response("<html>SPA fallback</html>", { headers: { "Content-Type": "text/html" } });
     },
   };
-  return { files, paths, index, requests, loader: new QuestionPacks(assets) };
+  return { files, paths, index, requests, loader: new QuestionPacks(assets, now) };
 }
 const config = { ...DEFAULT_CONFIG, categories: ["Science" as const], source: "bundled" as const };
 
@@ -130,6 +130,64 @@ test("format, category and rating filters are enforced before reading indexes", 
   ])
     assert.deepEqual(await loader.select("tossup", changed, [], 1, () => 0), []);
   assert.deepEqual(await loader.select("snapper", config, [], 1, () => 0), []);
+  assert.deepEqual(requests, ["manifest.json"]);
+});
+
+test("format inventory counts use only the cached manifest and honor matching filters", async () => {
+  const { loader, files, requests, index } = fixture([[question(1)]]);
+  files.set("manifest.json", {
+    version: 1,
+    total: 26,
+    groups: [
+      { format: "tossup", category: "Science", difficulty: "medium", index, count: 9 },
+      {
+        format: "snapper",
+        category: "Science",
+        difficulty: "medium",
+        index: "short.json",
+        count: 1,
+      },
+      { format: "tossup", category: "Math", difficulty: "medium", index: "math.json", count: 3 },
+      { format: "snapper", category: "Science", difficulty: "hard", index: "hard.json", count: 7 },
+      {
+        format: "snapper",
+        category: "Science",
+        difficulty: "unrated",
+        index: "unrated.json",
+        count: 6,
+      },
+    ],
+  });
+  assert.deepEqual(await loader.counts(config), { tossup: 9, snapper: 1 });
+  assert.deepEqual(await loader.counts({ ...config, categories: ["Science", "Math"] }), {
+    tossup: 12,
+    snapper: 1,
+  });
+  assert.deepEqual(await loader.counts({ ...config, difficulty: "hard" }), {
+    tossup: 0,
+    snapper: 7,
+  });
+  assert.deepEqual(await loader.counts({ ...config, difficulty: "unrated" }), {
+    tossup: 0,
+    snapper: 6,
+  });
+  assert.deepEqual(await loader.counts({ ...config, difficulty: "any" }), {
+    tossup: 9,
+    snapper: 14,
+  });
+  assert.deepEqual(await loader.counts({ ...config, categories: ["History"] }), {
+    tossup: 0,
+    snapper: 0,
+  });
+  assert.deepEqual(requests, ["manifest.json"], "counting never reads an index or answer shard");
+});
+
+test("an unavailable inventory fails once without repeated manifest requests", async () => {
+  const { loader, files, requests } = fixture([[question(1)]]);
+  files.delete("manifest.json");
+  await assert.rejects(loader.counts(config), /inventory unavailable/);
+  await assert.rejects(loader.counts(config), /inventory unavailable/);
+  assert.deepEqual(await loader.select("tossup", config, [], 1, () => 0), []);
   assert.deepEqual(requests, ["manifest.json"]);
 });
 
@@ -306,6 +364,78 @@ test("missing/HTML assets are a bounded failure rather than an endless fetch loo
   assert.deepEqual(await loader.select("tossup", config, [], 1, () => 0), []);
   assert.deepEqual(await loader.select("tossup", config, [], 1, () => 0), []);
   assert.deepEqual(requests, ["manifest.json"]);
+});
+
+test("a transient manifest failure recovers after cooldown and permanently caches successful content", async () => {
+  let now = 100;
+  const { loader, files, requests } = fixture([[question(1)]], "tossup", () => now);
+  const manifest = files.get("manifest.json");
+  files.delete("manifest.json");
+  assert.deepEqual(await loader.select("tossup", config, [], 1, () => 0), []);
+  files.set("manifest.json", manifest);
+  for (const time of [101, 30_100, 60_099]) {
+    now = time;
+    await assert.rejects(loader.counts(config), /inventory unavailable/);
+    assert.deepEqual(await loader.select("tossup", config, [], 1, () => 0), []);
+  }
+  assert.deepEqual(requests, ["manifest.json"], "calls during cooldown cannot refetch");
+
+  now = 60_100;
+  assert.deepEqual(await loader.counts(config), { tossup: 1, snapper: 0 });
+  assert.equal((await loader.select("tossup", config, [], 1, () => 0))[0]!.id, question(1).id);
+  assert.equal(requests.filter((path) => path === "manifest.json").length, 2);
+
+  files.delete("manifest.json");
+  now += 24 * 60 * 60 * 1000;
+  assert.deepEqual(await loader.counts(config), { tossup: 1, snapper: 0 });
+  assert.equal((await loader.select("tossup", config, [], 1, () => 0))[0]!.id, question(1).id);
+  assert.equal(requests.filter((path) => path === "manifest.json").length, 2);
+});
+
+test("concurrent manifest lookups coalesce both a failed request and its successful retry", async () => {
+  let now = 0;
+  let requests = 0;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const loader = new QuestionPacks(
+    {
+      async fetch() {
+        requests++;
+        if (requests === 1) {
+          await pending;
+          throw new Error("Temporary asset outage");
+        }
+        return Response.json({ version: 1, total: 0, groups: [] });
+      },
+    },
+    () => now,
+  );
+  const first = Promise.allSettled([
+    loader.counts(config),
+    loader.counts(config),
+    loader.select("tossup", config, [], 1, () => 0),
+  ]);
+  assert.equal(requests, 1);
+  release();
+  assert.deepEqual(
+    (await first).map((result) => result.status),
+    ["rejected", "rejected", "fulfilled"],
+  );
+  now = 59_999;
+  assert.deepEqual(await loader.select("tossup", config, [], 1, () => 0), []);
+  assert.equal(requests, 1);
+  now = 60_000;
+  assert.deepEqual(
+    await Promise.all([
+      loader.counts(config),
+      loader.counts(config),
+      loader.select("tossup", config, [], 1, () => 0),
+    ]),
+    [{ tossup: 0, snapper: 0 }, { tossup: 0, snapper: 0 }, []],
+  );
+  assert.equal(requests, 2);
 });
 
 test("invalid paths, duplicate indexes, wrong metadata and forged content IDs fail closed", async () => {

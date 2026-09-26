@@ -1,6 +1,6 @@
 # Repository questions
 
-These are English question snapshots for Snapper's offline fallback. `questions/`
+These are English question snapshots for Snapper's local question pool. `questions/`
 contains generated, playable JSON shards. `sources/` contains the complete
 compressed source snapshots, checksums and license text. **Neither directory is
 a public website directory.** The Worker alone reads the question assets; it
@@ -90,7 +90,9 @@ Cloudflare Worker runs first for every request and returns 404 for private pack
 paths, including encoded or ambiguous aliases. Its Durable Object reads shards
 directly through `ASSETS`; no raw-pack HTTP route exists. The manifest/index and
 shard caches are bounded, and the full archive never enters the JavaScript
-bundle or a participant's browser. Keep `run_worker_first: true`; never create
+bundle or a participant's browser. A failed manifest lookup is retried on demand
+after a one-minute cooldown so temporary failures do not permanently restrict
+play to the original small pack. Keep `run_worker_first: true`; never create
 asset redirects/rewrites into the private prefix. Source archives are not
 deployed. Development keeps packs outside `public/` and blocks filesystem access.
 

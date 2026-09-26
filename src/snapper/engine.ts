@@ -19,7 +19,6 @@ const IDLE_MS = 10 * 60_000;
 const CLARIFICATION_MS = 8000;
 type Pause = "manual" | "idle" | "challenge" | "participants" | "moderator";
 type Scores = Record<Team, number>;
-type Shoot = { used: Scores; cycle: Record<Team, string[]>; done: string[] };
 interface Turn {
   primary: string;
   opponent: string | null;
@@ -32,7 +31,6 @@ interface Block {
   teams: Record<string, Team | null>;
   turns: Turn[];
   bonusTeam: Team | null;
-  shoot: Shoot;
 }
 interface Attempt extends AttemptView {
   at: number;
@@ -58,7 +56,6 @@ interface Question {
   attempts: Attempt[];
   baseScores: Record<string, number>;
   baseTeams: Scores;
-  baseShoot: Shoot;
   baseBonus: Team | null;
   scoreCutoff: number;
   revealed: boolean;
@@ -93,14 +90,12 @@ export interface Session {
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
-const emptyShoot = (): Shoot => ({ used: { A: 0, B: 0 }, cycle: { A: [], B: [] }, done: [] });
 const active = (state: Session) =>
   state.players.filter((player) => player.connected && player.role === "player");
 const moderators = (state: Session) =>
   state.players.some((player) => player.connected && (player.owner || player.moderator));
 const isModerator = (player: PlayerView) => player.owner || player.moderator;
-const frozen = (format?: Format) =>
-  format === "assigned" || format === "shootout" || format === "team";
+const frozen = (format?: Format) => format === "assigned" || format === "team";
 const bump = (state: Session) => {
   state.revision++;
   return state;
@@ -228,6 +223,60 @@ export function createSession(
   };
 }
 
+/** Upgrade trusted coordinator snapshots without replaying or rejudging play. */
+export function migrateSession(previous: Session, now: number): Session {
+  const formats = normalizeFormats(previous.config.mode, previous.config.formats);
+  const pendingFormats = previous.pendingConfig
+    ? normalizeFormats(previous.pendingConfig.mode, previous.pendingConfig.formats)
+    : null;
+  const sameFormats = (a: readonly string[], b: readonly string[]) =>
+    a.length === b.length && a.every((value, index) => value === b[index]);
+  const legacyBlock = (previous.block?.bundle.format as string | undefined) === "shootout";
+  if (
+    !legacyBlock &&
+    sameFormats(formats, previous.config.formats) &&
+    (!previous.pendingConfig || sameFormats(pendingFormats!, previous.pendingConfig.formats)) &&
+    !(previous.block && "shoot" in previous.block) &&
+    !(previous.question && "baseShoot" in previous.question)
+  )
+    return previous;
+
+  const state = clone(previous);
+  state.config.formats = formats;
+  if (state.pendingConfig) state.pendingConfig.formats = pendingFormats!;
+  if (state.block) delete (state.block as Block & { shoot?: unknown }).shoot;
+  if (state.question) delete (state.question as Question & { baseShoot?: unknown }).baseShoot;
+  if (legacyBlock && state.block) {
+    const block = state.block;
+    const presented = block.index + (state.question ? 1 : 0);
+    const keptIds = new Set(block.bundle.atoms.slice(0, presented).map((atom) => atom.id));
+    if (state.question) keptIds.add(state.question.atom.id);
+    const unaskedIds = new Set(block.bundle.atoms.slice(presented).map((atom) => atom.id));
+    state.usedIds = state.usedIds.filter((id) => !unaskedIds.has(id) || keptIds.has(id));
+    if (state.question) {
+      // Keep the index so question, answer-window and attempt identities stay
+      // stable; count makes the current question the last one in this block.
+      block.bundle.format = "snapper";
+      block.bundle.title = "Quick snapper";
+      block.bundle.atoms = block.bundle.atoms.slice(0, presented);
+      block.count = presented;
+      block.turns = [];
+      block.bonusTeam = null;
+      state.needsBlock = false;
+    } else {
+      state.block = null;
+      state.phase = "waiting";
+      applyConfiguration(state);
+      applyPendingTeams(state);
+    }
+    // Retirement no longer restricts who can play or blocks completion. Other
+    // holds retain their original pause instant and the question's deadlines.
+    clearPause(state, "participants", now);
+    refreshHolds(state, now);
+  }
+  return bump(state);
+}
+
 function restoreConnection(state: Session, player: PlayerView): void {
   const wanted = state.wantedRoles[player.id] ?? player.role;
   const playerSpace = active(state).filter((value) => value.id !== player.id).length < 16;
@@ -295,7 +344,7 @@ export function readyFormats(state: Session): Format[] {
   return normalizeFormats(config.mode, config.formats).filter((format) => {
     if (config.mode === "ffa") return format !== "team";
     if (!players.some((player) => player.team)) return false;
-    return !["team", "assigned", "shootout"].includes(format) || bothTeams;
+    return !["team", "assigned"].includes(format) || bothTeams;
   });
 }
 
@@ -318,31 +367,11 @@ function participantsFor(state: Session, block: Block, index: number): string[] 
   }
   if (block.bundle.format === "team" && index > 0)
     return block.rosterIds.filter((id) => block.teams[id] === block.bonusTeam);
-  if (block.bundle.format === "shootout") {
-    // A recovered pre-migration FFA block finishes its original rules; no new one can start.
-    if (state.config.mode === "ffa")
-      return block.rosterIds.filter((id) => !block.shoot.done.includes(id));
-    const max = Math.max(
-      ...(["A", "B"] as const).map(
-        (team) => block.rosterIds.filter((id) => block.teams[id] === team).length,
-      ),
-    );
-    return block.rosterIds.filter((id) => {
-      const team = block.teams[id];
-      return !!team && block.shoot.used[team] < max && !block.shoot.cycle[team].includes(id);
-    });
-  }
   return frozen(block.bundle.format)
     ? block.rosterIds
     : active(state)
         .filter((player) => state.config.mode === "ffa" || player.team)
         .map((player) => player.id);
-}
-
-function shootFinished(state: Session): boolean {
-  const b = state.block;
-  if (!b || b.bundle.format !== "shootout") return false;
-  return participantsFor(state, b, b.index).length === 0;
 }
 
 function questionCanStart(state: Session, index: number): boolean {
@@ -401,12 +430,6 @@ export function startBlock(previous: Session, bundle: QuestionBundle, now: numbe
       }
     }
     count = turns.length;
-  } else if (bundle.format === "shootout") {
-    const n = Math.max(
-      rosterIds.filter((id) => teams[id] === "A").length,
-      rosterIds.filter((id) => teams[id] === "B").length,
-    );
-    count = Math.max(12, 4 * n);
   } else if (bundle.format === "team") count = 4;
   else if (bundle.format !== "open") count = 1;
   const selected = bundle.atoms.slice(0, count);
@@ -426,7 +449,6 @@ export function startBlock(previous: Session, bundle: QuestionBundle, now: numbe
     teams,
     turns,
     bonusTeam: null,
-    shoot: emptyShoot(),
   };
   state.blockNumber++;
   state.usedIds.push(...selected.map((atom) => atom.id));
@@ -467,7 +489,6 @@ function beginQuestion(state: Session, index: number, now: number): void {
     attempts: [],
     baseScores: Object.fromEntries(state.players.map((player) => [player.id, player.score])),
     baseTeams: clone(state.teamScores),
-    baseShoot: clone(block.shoot),
     baseBonus: block.bonusTeam,
     scoreCutoff: 0,
     revealed: false,
@@ -579,7 +600,6 @@ function recompute(state: Session): void {
     if (q.baseScores[player.id] !== undefined) player.score = q.baseScores[player.id]!;
   });
   state.teamScores = clone(q.baseTeams);
-  b.shoot = clone(q.baseShoot);
   b.bonusTeam = q.baseBonus;
   q.winner = null;
   for (let i = 0; i < q.attempts.length; i++) {
@@ -602,16 +622,6 @@ function recompute(state: Session): void {
     if (!correct) continue;
     q.winner = attempt.playerId;
     if (b.bundle.format === "team" && b.index === 0) b.bonusTeam = attempt.team;
-    if (b.bundle.format === "shootout") {
-      if (state.config.mode === "ffa") b.shoot.done.push(attempt.playerId);
-      else if (attempt.team) {
-        const team = attempt.team;
-        b.shoot.used[team]++;
-        b.shoot.cycle[team].push(attempt.playerId);
-        const members = b.rosterIds.filter((id) => b.teams[id] === team);
-        if (members.every((id) => b.shoot.cycle[team].includes(id))) b.shoot.cycle[team] = [];
-      }
-    }
   }
 }
 
@@ -682,11 +692,7 @@ function advance(state: Session, now: number): void {
     waitingState(state, now);
     return;
   }
-  if (
-    b.index + 1 >= b.count ||
-    shootFinished(state) ||
-    (b.bundle.format === "team" && b.index === 0 && !b.bonusTeam)
-  ) {
+  if (b.index + 1 >= b.count || (b.bundle.format === "team" && b.index === 0 && !b.bonusTeam)) {
     waitingState(state, now);
     return;
   }

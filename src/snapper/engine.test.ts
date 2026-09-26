@@ -4,6 +4,7 @@ import {
   addParticipant,
   configureSession,
   createSession,
+  migrateSession,
   nextDeadline,
   publicView,
   readyFormats,
@@ -277,57 +278,9 @@ test("unearned bonuses are skipped without exposing their question text", () => 
   assert.equal(s.needsBlock, true);
 });
 
-test("Shootout gives unequal teams equal scoring capacity and resets only complete cycles", () => {
-  const people = [
-    person("a", "A"),
-    person("a2", "A"),
-    person("a3", "A"),
-    ...Array.from({ length: 5 }, (_, i) => person(`b${i}`, "B")),
-  ];
-  let s = start("shootout", people, { mode: "teams" });
-  assert.equal(s.block!.count, 20);
-  for (const id of ["a", "a2"]) {
-    s = answer(s, id);
-    s = next(s);
-    assert.equal(publicView(s, id, 0).canBuzz, false);
-  }
-  s = answer(s, "a3");
-  s = next(s);
-  assert.equal(publicView(s, "a", 0).canBuzz, true);
-  for (const id of ["a", "a2"]) {
-    s = answer(s, id);
-    s = next(s);
-  }
-  assert.equal(s.teamScores.A, 50);
-  assert.ok(publicView(s, "a3", 0).eligibleIds.every((id) => id.startsWith("b")));
-  for (const id of ["b0", "b1", "b2", "b3", "b4"]) {
-    s = answer(s, id);
-    s = next(s);
-  }
-  assert.equal(s.block, null);
-  assert.deepEqual(s.teamScores, { A: 50, B: 50 });
-});
-
-test("correcting a cycle-ending Shootout answer restores the previous retirement set", () => {
+test("a frozen bonus roster retains disconnected players and excludes replacements", () => {
   let s = start(
-    "shootout",
-    [person("a", "A"), person("a2", "A"), person("b", "B"), person("b2", "B"), person("b3", "B")],
-    { mode: "teams" },
-  );
-  s = answer(s, "a");
-  s = next(s);
-  s = answer(s, "a2");
-  s = act(s, "a", { type: "correct", attemptId: s.question!.attempts[0]!.id, verdict: "reject" });
-  assert.deepEqual(s.block!.shoot.cycle.A, ["a"]);
-  assert.equal(s.block!.shoot.used.A, 1);
-  s = next(s);
-  assert.equal(publicView(s, "a", 0).canBuzz, false);
-  assert.equal(publicView(s, "a2", 0).canBuzz, true);
-});
-
-test("a frozen unscored disconnected player cannot be replaced or bypassed", () => {
-  let s = start(
-    "shootout",
+    "team",
     [person("a", "A"), person("a2", "A"), person("b", "B"), person("b2", "B"), person("b3", "B")],
     { mode: "teams" },
   );
@@ -336,7 +289,7 @@ test("a frozen unscored disconnected player cannot be replaced or bypassed", () 
   s = setConnected(s, "a2", false, 0);
   s = addParticipant(s, person("new", "A"), 0);
   assert.equal(publicView(s, "new", 0).canBuzz, false);
-  assert.equal(publicView(s, "a", 0).canBuzz, false);
+  assert.equal(publicView(s, "a", 0).canBuzz, true);
   s = setConnected(s, "a2", true, 0);
   assert.equal(publicView(s, "a2", 0).canBuzz, true);
 });
@@ -522,32 +475,157 @@ test("idle pause is explicit and requires a moderator to resume", () => {
   assert.equal(s.pauses.length, 0);
 });
 
-test("team-dependent formats require two nonempty teams; FFA excludes scramble and Shootout", () => {
+test("team-dependent formats require two nonempty teams; FFA excludes scramble", () => {
   const teams = initial([person("a", "A")], { mode: "teams" });
-  assert.ok(
-    !readyFormats(teams).some((format) => ["team", "assigned", "shootout"].includes(format)),
-  );
+  assert.ok(!readyFormats(teams).some((format) => ["team", "assigned"].includes(format)));
   assert.ok(!readyFormats(initial()).includes("team"));
-  assert.ok(!readyFormats(initial()).includes("shootout"));
 });
 
-test("legacy FFA Shootout settings play as Snappers without retirement or duplicated weighting", () => {
-  const legacyConfig = { ...DEFAULT_CONFIG, formats: ["shootout" as const] };
-  assert.deepEqual(configSchema.parse(legacyConfig).formats, ["snapper"]);
-  assert.deepEqual(configSchema.parse({ ...legacyConfig, mode: "teams" }).formats, ["shootout"]);
-  let s = initial(undefined, legacyConfig);
-  // A stored session can predate schema normalization: readiness still handles it.
-  s.config.formats = ["shootout", "snapper"];
-  assert.deepEqual(readyFormats(s), ["snapper"]);
-  s = act(s, "a", { type: "start" });
-  assert.equal(startBlock(s, bundle("shootout"), 0), s, "the engine rejects FFA Shootout blocks");
-  s = startBlock(s, bundle("snapper", [atom(1)]), 0);
-  assert.equal(s.block!.count, 1);
+test("legacy Shootout settings in either mode become Snappers and cannot start Shootout", () => {
+  assert.ok(!(FORMATS as readonly string[]).includes("shootout"));
+  for (const mode of ["ffa", "teams"] as const) {
+    const config = configSchema.parse({
+      ...DEFAULT_CONFIG,
+      mode,
+      formats: ["shootout", "snapper"],
+    });
+    assert.deepEqual(config.formats, ["snapper"]);
+    let s = initial([person("a", "A"), person("b", "B")], config);
+    // A stored session can predate schema normalization: readiness still handles it.
+    s.config.formats = ["shootout", "snapper"] as unknown as Format[];
+    assert.deepEqual(readyFormats(s), ["snapper"]);
+    s = migrateSession(s, 0);
+    s = act(s, "a", { type: "start" });
+    const legacyBundle = { ...bundle("snapper"), format: "shootout" } as unknown as QuestionBundle;
+    assert.equal(startBlock(s, legacyBundle, 0), s, "no new Shootout block can start");
+    s = startBlock(s, bundle("snapper", [atom(1)]), 0);
+    s = answer(s, "a");
+    s = next(s);
+    s = startBlock(s, bundle("snapper", [atom(2)]), 0);
+    assert.equal(publicView(s, "a", 0).canBuzz, true, "a winner is not retired");
+    assert.deepEqual(s.usedIds, ["q-1", "q-2"]);
+  }
+});
+
+function legacyShootout(mode: "ffa" | "teams"): Session {
+  let s = start("open", [person("a", "A"), person("b", "B")], { mode });
   s = answer(s, "a");
   s = next(s);
-  s = startBlock(s, bundle("snapper", [atom(2)]), 0);
-  assert.equal(publicView(s, "a", 0).canBuzz, true, "a winner can answer the next normal question");
-  assert.deepEqual(s.usedIds, ["q-1", "q-2"]);
+  s = answer(s, "b", "wrong", 50);
+  s = act(s, "a", { type: "buzz" }, 100);
+  s.config.formats = ["shootout", "snapper", "open"] as unknown as Format[];
+  s.pendingConfig = {
+    ...structuredClone(s.config),
+    formats: ["snapper", "shootout"] as unknown as Format[],
+  };
+  const obsolete = { used: { A: 1, B: 0 }, cycle: { A: ["a"], B: [] }, done: ["a"] };
+  Object.assign(s.block!.bundle, { format: "shootout", title: "Shootout" });
+  Object.assign(s.block!, { shoot: structuredClone(obsolete) });
+  Object.assign(s.question!, { baseShoot: structuredClone(obsolete) });
+  return s;
+}
+
+test("stored Shootout migration preserves the current answer and releases only unasked questions", () => {
+  for (const mode of ["ffa", "teams"] as const) {
+    const original = legacyShootout(mode);
+    const originalJson = JSON.stringify(original);
+    const before = publicView(original, "a", 200);
+    const s = migrateSession(original, 200);
+    assert.equal(JSON.stringify(original), originalJson, "migration must not mutate storage input");
+    assert.deepEqual(s.config.formats, ["snapper", "open"]);
+    assert.deepEqual(s.pendingConfig!.formats, ["snapper"]);
+    assert.equal(s.block!.bundle.format, "snapper");
+    assert.equal(s.block!.bundle.title, "Quick snapper");
+    assert.equal(s.block!.index, 1);
+    assert.equal(s.block!.count, 2);
+    assert.deepEqual(
+      s.block!.bundle.atoms.map((q) => q.id),
+      ["q-0", "q-1"],
+    );
+    assert.deepEqual(s.usedIds, ["q-0", "q-1"]);
+    assert.equal("shoot" in s.block!, false);
+    assert.equal("baseShoot" in s.question!, false);
+    const expectedQuestion = { ...original.question! };
+    delete (expectedQuestion as { baseShoot?: unknown }).baseShoot;
+    assert.deepEqual(s.question, expectedQuestion);
+    assert.deepEqual(s.players, original.players);
+    assert.deepEqual(s.teamScores, original.teamScores);
+    const after = publicView(s, "a", 200);
+    assert.equal(after.question!.id, before.question!.id);
+    assert.equal(after.answerWindowId, before.answerWindowId);
+    assert.equal(after.deadline, before.deadline);
+    assert.deepEqual(after.attempts, before.attempts);
+    assert.equal(migrateSession(s, 300), s, "already-migrated state is an identity no-op");
+
+    let finished = answer(s, "a", "blue", 300);
+    finished = next(finished, 300);
+    assert.equal(finished.block, null, "migration ends the block after its current question");
+    finished = startBlock(finished, bundle("snapper", [atom(2)]), 300);
+    assert.equal(finished.question!.atom.id, "q-2", "the unasked tail returns to normal play");
+    assert.equal(publicView(finished, "a", 300).canBuzz, true);
+  }
+});
+
+test("migration removes retirement holds while preserving manual and challenge pauses", () => {
+  let original = legacyShootout("teams");
+  original = answer(original, "a", "blue", 150);
+  original = act(original, "b", { type: "challenge" }, 200);
+  original = act(original, "a", { type: "pause" }, 200);
+  original.pauses.push("participants");
+  const s = migrateSession(original, 5000);
+  assert.deepEqual(s.pauses, ["challenge", "manual"]);
+  assert.equal(s.pausedAt, 200);
+  assert.equal(s.question!.revealAt, original.question!.revealAt);
+  assert.deepEqual(s.challenge, original.challenge);
+  assert.deepEqual(s.players, original.players);
+  assert.equal(nextDeadline(s), null);
+  const attemptId = s.question!.attempts[0]!.id;
+  const corrected = act(s, "a", { type: "correct", attemptId, verdict: "accept" }, 5000);
+  assert.deepEqual(
+    corrected.players.map((p) => p.score),
+    [10, 10],
+  );
+  assert.equal(corrected.phase, "reveal", "correction never reopens the revealed prompt");
+
+  const onlyRetirement = legacyShootout("ffa");
+  onlyRetirement.pauses = ["participants"];
+  onlyRetirement.pausedAt = 200;
+  const resumed = migrateSession(onlyRetirement, 1200);
+  assert.deepEqual(resumed.pauses, []);
+  assert.equal(resumed.question!.answerAt, onlyRetirement.question!.answerAt! + 1000);
+  assert.equal(publicView(resumed, "a", 1200).canAnswer, true);
+});
+
+test("migration with no current question releases unasked IDs and returns safely to waiting", () => {
+  const original = legacyShootout("teams");
+  original.question = null;
+  original.phase = "waiting";
+  original.pauses = ["manual", "participants"];
+  original.pausedAt = 200;
+  const s = migrateSession(original, 500);
+  assert.equal(s.block, null);
+  assert.equal(s.question, null);
+  assert.equal(s.phase, "waiting");
+  assert.deepEqual(s.usedIds, ["q-0"]);
+  assert.deepEqual(s.players, original.players);
+  assert.deepEqual(s.pauses, ["manual"]);
+  assert.equal(s.needsBlock, false);
+  assert.deepEqual(s.config.formats, ["snapper"]);
+  assert.equal(s.pendingConfig, null);
+});
+
+test("obsolete Shootout fields on other formats are pruned without changing play", () => {
+  const original = start("assigned");
+  Object.assign(original.block!, { shoot: { done: [] } });
+  Object.assign(original.question!, { baseShoot: { done: [] } });
+  const s = migrateSession(original, 200);
+  assert.equal("shoot" in s.block!, false);
+  assert.equal("baseShoot" in s.question!, false);
+  assert.equal(s.block!.bundle.format, "assigned");
+  assert.deepEqual(publicView(s, "a", 200), {
+    ...publicView(original, "a", 200),
+    revision: s.revision,
+  });
 });
 
 test("used questions cannot be replayed or duplicated inside a selected bundle", () => {
@@ -565,9 +643,9 @@ test("state transitions do not mutate snapshots held by the coordinator", () => 
   assert.equal(JSON.stringify(s), before);
 });
 
-test("a no-eligible dropout hold resumes only when the original eligible player returns", () => {
-  let s = start("shootout", [person("a", "A"), person("b", "B")], { mode: "teams" });
-  s = answer(s, "a");
+test("a bonus dropout hold resumes only when the original eligible player returns", () => {
+  let s = start("team", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  s = answer(s, "b");
   s = setConnected(s, "b", false, 1);
   s = next(s, 2);
   assert.ok(s.pauses.includes("participants"));
@@ -580,15 +658,13 @@ test("a no-eligible dropout hold resumes only when the original eligible player 
 });
 
 test("resetting scores cannot resurrect erased points through a later correction", () => {
-  let s = start("shootout", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  let s = start("snapper", [person("a", "A"), person("b", "B")], { mode: "teams" });
   s = answer(s, "a");
   const attempt = s.question!.attempts[0]!.id;
   s = act(s, "a", { type: "reset-scores" });
   assert.equal(s.players[0]!.score, 0);
-  assert.equal(s.block!.shoot.used.A, 1);
   s = act(s, "a", { type: "correct", attemptId: attempt, verdict: "reject" });
   assert.equal(s.players[0]!.score, 0);
-  assert.equal(s.block!.shoot.used.A, 0);
   assert.equal(s.teamScores.A, 0);
 });
 
@@ -603,7 +679,7 @@ test("a same-verdict correction does not steal another player's active answer wi
 });
 
 test("returning through a spectator seat cannot bypass a frozen team assignment", () => {
-  let s = start("shootout", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  let s = start("team", [person("a", "A"), person("b", "B")], { mode: "teams" });
   s = act(s, "a", { type: "spectate" });
   const switched = transition(s, "a", { type: "take-seat", team: "B" }, 0);
   assert.ok(switched.error);
@@ -622,16 +698,16 @@ test("full spectators leave a returning identity capacity-waiting rather than ov
   assert.equal(s.players.filter((p) => p.connected).length, 32);
 });
 
-test("the Shootout prompt cap ends a block even when nobody scores", () => {
-  let s = start("shootout", [person("a", "A"), person("b", "B")], { mode: "teams" });
-  for (let i = 0; i < 12; i++) {
+test("an Open block ends after all authored questions even when nobody scores", () => {
+  let s = start("open", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  for (let i = 0; i < 3; i++) {
     s = answer(s, "a", "wrong");
     s = answer(s, "b", "wrong");
     s = next(s);
   }
   assert.equal(s.block, null);
   assert.equal(s.needsBlock, true);
-  assert.equal(s.usedIds.length, 12);
+  assert.equal(s.usedIds.length, 3);
 });
 
 test("restoring serialized coordinator state preserves deadlines and eligibility", () => {

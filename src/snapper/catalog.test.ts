@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundledOptions, contentId, parseQB, parseTrivia, selectBundle } from "./catalog.ts";
-import { DEFAULT_CONFIG, FORMATS, type PlayerView, type QuestionAtom } from "./protocol.ts";
+import { SHORTS } from "./bank.ts";
+import {
+  CATEGORIES,
+  DEFAULT_CONFIG,
+  FORMATS,
+  configSchema,
+  type PlayerView,
+  type QuestionAtom,
+} from "./protocol.ts";
 const players: PlayerView[] = Array.from({ length: 16 }, (_, i) => ({
   id: String(i),
   name: `Player ${i}`,
@@ -27,7 +35,20 @@ test("original content supplies every format at maximum player count", () => {
     }
   }
   assert.equal(bundledOptions("assigned", config, [], players)[0]!.atoms.length, 16);
-  assert.equal(bundledOptions("shootout", config, [], players)[0]!.atoms.length, 32);
+});
+
+test("every short question remains available as an independent Snapper", () => {
+  const options = bundledOptions(
+    "snapper",
+    { ...config, categories: [...CATEGORIES], difficulty: "any" },
+    [],
+    players,
+  );
+  assert.deepEqual(
+    new Set(options.map((bundle) => bundle.atoms[0]!.id)),
+    new Set(SHORTS.map((question) => contentId(question.text))),
+  );
+  assert.ok(options.every((bundle) => bundle.format === "snapper" && bundle.atoms.length === 1));
 });
 test("filters and seen IDs cannot be relaxed when content runs out", async () => {
   const narrowed = { ...config, formats: ["sequence" as const], categories: ["Canada" as const] };
@@ -131,22 +152,27 @@ test("team-only bundles require two nonempty teams", async () => {
   );
 });
 
-test("FFA converts saved Shootout selection to ordinary Snappers and never creates a Shootout", async () => {
-  const ffa = { ...config, mode: "ffa" as const, formats: ["shootout" as const] };
-  assert.deepEqual(bundledOptions("shootout", ffa, [], players), []);
-  const first = await selectBundle(ffa, [], players, fetch, () => 0.4);
-  assert.equal(first.bundle?.format, "snapper");
-  assert.equal(first.bundle?.atoms.length, 1);
-  const next = await selectBundle(
-    ffa,
-    first.bundle!.atoms.map((q) => q.id),
-    players,
-    fetch,
-    () => 0.4,
-  );
-  assert.equal(next.bundle?.format, "snapper");
-  assert.notEqual(next.bundle!.atoms[0]!.id, first.bundle!.atoms[0]!.id);
-  assert.equal(bundledOptions("shootout", config, [], players)[0]!.atoms.length, 32);
+test("both modes convert legacy Shootout settings to one ordinary Snapper selection", async () => {
+  for (const mode of ["ffa", "teams"] as const) {
+    const migrated = configSchema.parse({
+      ...config,
+      mode,
+      formats: ["shootout", "snapper"],
+    });
+    assert.deepEqual(migrated.formats, ["snapper"]);
+    const first = await selectBundle(migrated, [], players, fetch, () => 0.4);
+    assert.equal(first.bundle?.format, "snapper");
+    assert.equal(first.bundle?.atoms.length, 1);
+    const next = await selectBundle(
+      migrated,
+      first.bundle!.atoms.map((q) => q.id),
+      players,
+      fetch,
+      () => 0.4,
+    );
+    assert.equal(next.bundle?.format, "snapper");
+    assert.notEqual(next.bundle!.atoms[0]!.id, first.bundle!.atoms[0]!.id);
+  }
 });
 
 test("live trivia requests the block size instead of exhausting a pool smaller than fifty", async (t) => {
@@ -155,7 +181,6 @@ test("live trivia requests the block size instead of exhausting a pool smaller t
   for (const [format, available] of [
     ["snapper", 1],
     ["assigned", 16],
-    ["shootout", 32],
   ] as const) {
     now += 5101;
     let requested = 0;
@@ -208,12 +233,156 @@ const packedQuestion = (n: number, changes: Partial<QuestionAtom> = {}): Questio
   };
 };
 
-test("repository packs supply tossups and complete 16/32-question short formats", async () => {
+test("format chances follow a 9:1 matching inventory ratio and change with the filters", async () => {
+  for (const category of ["Science", "Math"] as const) {
+    let tossups = 0;
+    for (let ticket = 0; ticket < 100; ticket++) {
+      const selected = await selectBundle(
+        {
+          ...config,
+          formats: ["tossup", "snapper"],
+          categories: [category],
+          difficulty: "hard",
+        },
+        [],
+        players,
+        fetch,
+        () => (ticket + 0.5) / 100,
+        async (format) => [packedQuestion(format === "tossup" ? 1 : 2, { category })],
+        async (matching) => {
+          assert.deepEqual(matching.categories, [category]);
+          assert.equal(matching.difficulty, "hard");
+          return category === "Science" ? { tossup: 9, snapper: 1 } : { tossup: 1, snapper: 9 };
+        },
+      );
+      if (selected.bundle?.format === "tossup") tossups++;
+    }
+    assert.equal(tossups, category === "Science" ? 90 : 10);
+  }
+});
+
+test("disabled formats and legacy aliases cannot add duplicate format weight", async () => {
+  const migrated = configSchema.parse({
+    ...config,
+    formats: ["shootout", "snapper", "tossup"],
+    categories: ["Science"],
+    difficulty: "hard",
+  });
+  let snappers = 0;
+  for (let ticket = 0; ticket < 100; ticket++) {
+    const selected = await selectBundle(
+      migrated,
+      [],
+      players,
+      fetch,
+      () => (ticket + 0.5) / 100,
+      async (format) => [packedQuestion(format === "tossup" ? 1 : 2)],
+      async () => ({ tossup: 9, snapper: 1 }),
+    );
+    if (selected.bundle?.format === "snapper") snappers++;
+  }
+  assert.equal(snappers, 10, "the retired alias does not double Snapper's selection chance");
+  const selected = await selectBundle(
+    { ...migrated, formats: ["snapper"] },
+    [],
+    players,
+    fetch,
+    () => 0,
+    async (format) => {
+      assert.equal(
+        format,
+        "snapper",
+        "a disabled format cannot be selected even with more content",
+      );
+      return [packedQuestion(2)];
+    },
+    async () => ({ tossup: 900, snapper: 1 }),
+  );
+  assert.equal(selected.bundle?.format, "snapper");
+});
+
+test("authored group weighting counts only complete unseen groups and their distinct questions", async () => {
+  const narrowed = {
+    ...config,
+    formats: ["open" as const, "snapper" as const],
+    categories: ["Science" as const],
+  };
+  const used = [bundledOptions("open", narrowed, [], players)[0]!.atoms[0]!.id];
+  // Science has three authored groups of four and twelve short questions.
+  // Consuming one member leaves eight group questions and eleven singles.
+  const first = await selectBundle(narrowed, used, players, fetch, () => 0.4);
+  assert.equal(first.bundle?.format, "open", "0.4 is within the group's 8/19 share");
+  const next = await selectBundle(narrowed, used, players, fetch, () => 0.45);
+  assert.equal(next.bundle?.format, "snapper", "0.45 is outside the group's 8/19 share");
+  assert.ok(
+    [first.bundle, next.bundle].every((bundle) => bundle?.atoms.every((q) => !used.includes(q.id))),
+  );
+});
+
+test("Assigned is weighted only when the matching inventory can fill its whole block", async () => {
+  const selected = await selectBundle(
+    { ...config, formats: ["assigned", "snapper"], categories: ["Science"] },
+    [],
+    players,
+    fetch,
+    () => 0,
+    async (_format, _matching, _used, count) => {
+      assert.equal(
+        count,
+        1,
+        "twelve curated questions cannot fill a sixteen-player Assigned block",
+      );
+      return [];
+    },
+    async () => ({ tossup: 0, snapper: 0 }),
+  );
+  assert.equal(selected.bundle?.format, "snapper");
+});
+
+test("exhausted weighted formats are tried once then removed without repeating content", async () => {
+  const old = packedQuestion(1);
+  const fresh = packedQuestion(2);
+  for (const exhausted of [false, true]) {
+    const calls: string[] = [];
+    const selected = await selectBundle(
+      { ...config, formats: ["tossup", "snapper"], difficulty: "hard", categories: ["Science"] },
+      exhausted ? [old.id, fresh.id] : [old.id],
+      players,
+      fetch,
+      () => 0,
+      async (format) => {
+        calls.push(format);
+        return [format === "tossup" ? old : fresh];
+      },
+      async () => ({ tossup: 9, snapper: 1 }),
+    );
+    assert.deepEqual(calls, ["tossup", "snapper"]);
+    if (exhausted) assert.equal(selected.bundle, null);
+    else assert.deepEqual(selected.bundle?.atoms, [fresh]);
+  }
+});
+
+test("a failed inventory lookup keeps an otherwise working repository format available", async () => {
+  const selected = await selectBundle(
+    { ...config, formats: ["tossup"], difficulty: "hard", categories: ["Science"] },
+    [],
+    players,
+    fetch,
+    () => 0,
+    async () => [packedQuestion(1)],
+    async () => {
+      throw new Error("inventory unavailable");
+    },
+  );
+  assert.equal(selected.bundle?.format, "tossup");
+  assert.equal(selected.bundle?.atoms[0]!.id, packedQuestion(1).id);
+});
+
+test("repository packs supply tossups, Snappers and complete 16-question Assigned blocks", async () => {
   for (const [format, expectedFormat, count] of [
     ["tossup", "tossup", 1],
     ["snapper", "snapper", 1],
     ["assigned", "snapper", 16],
-    ["shootout", "snapper", 32],
   ] as const) {
     let calls = 0;
     const result = await selectBundle(
@@ -328,4 +497,102 @@ test("missing repository assets retain suitable original content and all authore
     assert.equal(selected.bundle?.format, format);
     assert.equal(calls, 0, `${format} keeps its authored structure`);
   }
+});
+
+const liveTossup = {
+  question_sanitized:
+    "This hard science test question is provided by the live service. Name its example.",
+  answer_sanitized: "Live example",
+  category: "Science",
+};
+
+test("mixed sources give the local corpus half the first choices even when live retrieval is healthy", async () => {
+  let liveCalls = 0;
+  let localCalls = 0;
+  let localSelections = 0;
+  for (let ticket = 0; ticket < 100; ticket++) {
+    const selected = await selectBundle(
+      {
+        ...config,
+        source: "mixed",
+        formats: ["tossup"],
+        categories: ["Science"],
+        difficulty: "hard",
+      },
+      [],
+      players,
+      async () => {
+        liveCalls++;
+        return Response.json({ tossups: [liveTossup] });
+      },
+      () => (ticket + 0.5) / 100,
+      async () => {
+        localCalls++;
+        return [packedQuestion(10)];
+      },
+      async () => ({ tossup: 1000, snapper: 0 }),
+    );
+    assert.ok(selected.bundle);
+    if (selected.bundle.atoms[0]!.id === packedQuestion(10).id) localSelections++;
+  }
+  assert.equal(localSelections, 50);
+  assert.equal(liveCalls, 50, "local-first success makes no unnecessary provider call");
+  assert.equal(localCalls, 50, "live-first success makes no unnecessary shard read");
+});
+
+test("repeated live results fall through to unseen repository questions then exhaust safely", async () => {
+  const used: string[] = [];
+  const local = [packedQuestion(20), packedQuestion(21)];
+  const matching = {
+    ...config,
+    source: "mixed" as const,
+    formats: ["tossup" as const],
+    categories: ["Science" as const],
+    difficulty: "hard" as const,
+  };
+  for (let round = 0; round < 4; round++) {
+    const selected = await selectBundle(
+      matching,
+      used,
+      players,
+      async () => Response.json({ tossups: [liveTossup] }),
+      () => 0,
+      async () => local, // Defensively filter even a loader that returns used IDs.
+      async () => ({ tossup: 2, snapper: 0 }),
+    );
+    if (round === 3) assert.equal(selected.bundle, null);
+    else {
+      assert.ok(selected.bundle);
+      const id = selected.bundle.atoms[0]!.id;
+      assert.ok(!used.includes(id));
+      used.push(id);
+    }
+  }
+  assert.equal(new Set(used).size, 3);
+});
+
+test("an unavailable local-first pool still falls back to the live source", async () => {
+  let requests = 0;
+  const selected = await selectBundle(
+    {
+      ...config,
+      source: "mixed",
+      formats: ["tossup"],
+      categories: ["Science"],
+      difficulty: "hard",
+    },
+    [],
+    players,
+    async () => {
+      requests++;
+      return Response.json({ tossups: [liveTossup] });
+    },
+    () => 0.75,
+    async () => {
+      throw new Error("Temporary pack failure");
+    },
+    async () => ({ tossup: 1000, snapper: 0 }),
+  );
+  assert.equal(requests, 1);
+  assert.equal(selected.bundle?.atoms[0]?.id, contentId(liveTossup.question_sanitized));
 });

@@ -16,6 +16,10 @@ export type RepositoryQuestionLoader = (
   count: number,
   random: () => number,
 ) => Promise<QuestionAtom[]>;
+/** Matching immutable inventory sizes, not a count of this session's unseen questions. */
+export type RepositoryQuestionCounts = (
+  config: RoomConfig,
+) => Promise<{ tossup: number; snapper: number }>;
 
 /** Content identity ignores provider IDs, punctuation and harmless spacing. */
 export function contentId(text: string): string {
@@ -51,11 +55,51 @@ function shuffled<T>(items: T[], random: () => number): T[] {
   }
   return result;
 }
+function weightedFormats(
+  candidates: Array<{ format: Format; weight: number }>,
+  random: () => number,
+): Format[] {
+  const remaining = candidates.filter(({ weight }) => weight > 0);
+  const result: Format[] = [];
+  while (remaining.length) {
+    const total = remaining.reduce((sum, candidate) => sum + candidate.weight, 0);
+    let ticket = remaining.length === 1 ? 0 : randomIndex(total, random);
+    const index = remaining.findIndex((candidate) => {
+      if (ticket < candidate.weight) return true;
+      ticket -= candidate.weight;
+      return false;
+    });
+    result.push(remaining.splice(index, 1)[0]!.format);
+  }
+  return result;
+}
 const eligible = (q: QuestionAtom, config: RoomConfig, used: Set<string>) =>
   !used.has(q.id) &&
   config.categories.includes(q.category as RoomConfig["categories"][number]) &&
   q.language === config.language &&
   (config.difficulty === "any" || config.difficulty === q.difficulty);
+function authoredInventory(config: RoomConfig, used: Set<string>): Record<Format, number> {
+  const count = (questions: QuestionAtom[]) =>
+    new Set(
+      questions
+        .map(identified)
+        .filter((q) => eligible(q, config, used))
+        .map((q) => q.id),
+    ).size;
+  const groups = GROUPS.map((group) => group.atoms.map(identified)).filter((atoms) =>
+    atoms.every((q) => eligible(q, config, used)),
+  );
+  const shorts = count(SHORTS);
+  return {
+    tossup: count(TOSSUPS),
+    snapper: shorts,
+    assigned: shorts,
+    sequence: count(SEQUENCES),
+    clues: count(CLUES),
+    open: count(groups.flat()),
+    team: count(groups.filter((atoms) => atoms.length === 4).flat()),
+  };
+}
 export function bundleSize(format: Format, config: RoomConfig, players: PlayerView[]): number {
   const active = players.filter(
     (p) => p.connected && p.role === "player" && (config.mode === "ffa" || p.team),
@@ -65,8 +109,6 @@ export function bundleSize(format: Format, config: RoomConfig, players: PlayerVi
     active.filter((p) => p.team === "B").length,
   );
   if (format === "assigned") return config.mode === "teams" ? 2 * largest : active.length;
-  if (format === "shootout")
-    return config.mode === "teams" ? Math.max(12, 4 * largest) : Math.max(12, 2 * active.length);
   return 1;
 }
 export function bundledOptions(
@@ -76,7 +118,6 @@ export function bundledOptions(
   players: PlayerView[],
   random: () => number = Math.random,
 ): QuestionBundle[] {
-  if (format === "shootout" && config.mode === "ffa") return [];
   const seen = new Set(usedIds);
   const usable = (q: QuestionAtom) => eligible(q, config, seen);
   if (format === "open" || format === "team")
@@ -100,7 +141,7 @@ export function bundledOptions(
   )
     .map(identified)
     .filter(usable);
-  if (format === "assigned" || format === "shootout") {
+  if (format === "assigned") {
     const count = bundleSize(format, config, players);
     if (!count || pool.length < count) return [];
     const atoms = shuffled(pool, random).slice(0, count);
@@ -108,7 +149,7 @@ export function bundledOptions(
       {
         id: `${format}-${atoms[0]!.id}`,
         format,
-        title: format === "assigned" ? "Your turn" : "Shootout",
+        title: "Your turn",
         atoms,
       },
     ];
@@ -306,8 +347,7 @@ async function external(
           .filter((q): q is QuestionAtom => q !== null)
       : [];
   }
-  if (!["snapper", "assigned", "shootout"].includes(format) || Date.now() < triviaNextRequest)
-    return [];
+  if (!["snapper", "assigned"].includes(format) || Date.now() < triviaNextRequest) return [];
   const categories = config.categories.filter((c) => triviaCategories[c]);
   if (!categories.length) return [];
   const category = categories[randomIndex(categories.length, random)]!;
@@ -333,18 +373,54 @@ export async function selectBundle(
   fetcher: typeof fetch = fetch,
   random: () => number = Math.random,
   repository?: RepositoryQuestionLoader,
+  repositoryCounts?: RepositoryQuestionCounts,
 ): Promise<{ bundle: QuestionBundle | null; message?: string }> {
   const active = players.filter((p) => p.connected && p.role === "player");
   if (!active.length)
     return { bundle: null, message: "A player needs to take a seat before play can continue." };
   const bothTeams = active.some((p) => p.team === "A") && active.some((p) => p.team === "B");
-  const formats = shuffled(
+  const used = new Set(usedIds);
+  const inventory = authoredInventory(config, used);
+  let imported: Awaited<ReturnType<RepositoryQuestionCounts>> | null = null;
+  if (repositoryCounts) {
+    try {
+      const counts = await repositoryCounts(config);
+      if (
+        [counts.tossup, counts.snapper].every((value) => Number.isSafeInteger(value) && value >= 0)
+      )
+        imported = counts;
+    } catch {
+      // A failed count lookup must not disable a still-working question loader.
+    }
+  }
+  const formats = weightedFormats(
     normalizeFormats(config.mode, config.formats)
-      .filter((f) => f !== "team" || (config.mode === "teams" && bothTeams))
-      .filter((f) => config.mode !== "teams" || !["assigned", "shootout"].includes(f) || bothTeams),
+      .filter((format) => format !== "team" || (config.mode === "teams" && bothTeams))
+      .filter((format) => config.mode !== "teams" || format !== "assigned" || bothTeams)
+      .map((format) => {
+        const repositoryKind =
+          format === "tossup"
+            ? "tossup"
+            : format === "snapper" || format === "assigned"
+              ? "snapper"
+              : null;
+        const livePossible =
+          config.source === "mixed" &&
+          config.difficulty !== "unrated" &&
+          repositoryKind !== null &&
+          config.categories.some((category) =>
+            repositoryKind === "tossup" ? qbCategories[category] : triviaCategories[category],
+          );
+        const unknownRepository = Boolean(repository && repositoryKind && imported === null);
+        const count = inventory[format] + (repositoryKind ? (imported?.[repositoryKind] ?? 0) : 0);
+        const enoughForBlock = count >= bundleSize(format, config, players);
+        return {
+          format,
+          weight: enoughForBlock ? count : livePossible || unknownRepository ? 1 : 0,
+        };
+      }),
     random,
   );
-  const used = new Set(usedIds);
   const unique = (questions: QuestionAtom[], seen: Set<string>) => [
     ...new Map(
       questions
@@ -381,59 +457,65 @@ export async function selectBundle(
     id: `${format}-${atoms[0]!.id}`,
     format,
     title:
-      format === "assigned"
-        ? "Your turn"
-        : format === "shootout"
-          ? "Shootout"
-          : format === "tossup"
-            ? "Long tossup"
-            : "Quick snapper",
+      format === "assigned" ? "Your turn" : format === "tossup" ? "Long tossup" : "Quick snapper",
     atoms,
   });
   let fallback = false;
   for (const format of formats) {
     const count = bundleSize(format, config, players);
-    if (config.source === "mixed") {
-      try {
-        const live = unique(await external(format, config, fetcher, random, count), used);
-        if (live.length && ["assigned", "shootout"].includes(format)) {
-          const pool = [
-            ...live,
-            ...(live.length < count
-              ? await localAtoms(
-                  format,
-                  count - live.length,
-                  live.map((q) => q.id),
-                )
-              : []),
-          ];
-          if (pool.length >= count) return { bundle: block(format, pool.slice(0, count)) };
-        } else if (live.length)
+    // Mixed means both pools participate even when a live provider is healthy.
+    // Choosing the source once per block avoids starving the much larger local
+    // corpus, without adding live requests or overriding saved content filters.
+    const sources =
+      config.source === "mixed" && ["tossup", "snapper", "assigned"].includes(format)
+        ? random() < 0.5
+          ? ["live", "local"]
+          : ["local", "live"]
+        : ["local"];
+    for (const source of sources) {
+      if (source === "live") {
+        try {
+          const live = unique(await external(format, config, fetcher, random, count), used);
+          if (live.length && format === "assigned") {
+            const pool = [
+              ...live,
+              ...(live.length < count
+                ? await localAtoms(
+                    format,
+                    count - live.length,
+                    live.map((q) => q.id),
+                  )
+                : []),
+            ];
+            if (pool.length >= count) return { bundle: block(format, pool.slice(0, count)) };
+          } else if (live.length)
+            return {
+              bundle: one(
+                format,
+                format === "tossup" ? "Long tossup" : "Quick snapper",
+                live[randomIndex(live.length, random)]!,
+              ),
+            };
+        } catch {
+          fallback = true;
+        }
+      } else {
+        const loaded = ["tossup", "snapper", "assigned"].includes(format)
+          ? await localAtoms(format, count)
+          : [];
+        const local =
+          loaded.length && loaded.length >= count
+            ? [block(format, loaded)]
+            : bundledOptions(format, config, usedIds, players, random);
+        if (local.length)
           return {
-            bundle: one(
-              format,
-              format === "tossup" ? "Long tossup" : "Quick snapper",
-              live[randomIndex(live.length, random)]!,
-            ),
+            bundle: local[randomIndex(local.length, random)]!,
+            ...(fallback
+              ? { message: "The question service is unavailable. Playing from the bundled pack." }
+              : {}),
           };
-      } catch {
-        fallback = true;
       }
     }
-    const loaded = ["tossup", "snapper", "assigned", "shootout"].includes(format)
-      ? await localAtoms(format, count)
-      : [];
-    const local =
-      loaded.length && loaded.length >= count
-        ? [block(format, loaded)]
-        : bundledOptions(format, config, usedIds, players, random);
-    if (local.length)
-      return {
-        bundle: local[randomIndex(local.length, random)]!,
-        ...(fallback
-          ? { message: "The question service is unavailable. Playing from the bundled pack." }
-          : {}),
-      };
   }
   return {
     bundle: null,

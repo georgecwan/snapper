@@ -119,21 +119,48 @@ opening order or cross-session history. Lazy group weighting uses an acceptance
 step when an index reveals fewer unseen questions than its manifest count.
 Reservoir samples are shuffled before a group contributes only part of a block;
 taking an unshuffled prefix would favor early index entries. Index/shard reads
-and caches remain bounded; format choices stay independently random.
+and caches remain bounded.
+
+Format choices are independently weighted by matching question inventory:
+Tossup/Snapper use authored plus imported counts, Assigned uses the same short
+inventory when a full block is possible, and Open/team count distinct question
+parts of fully eligible groups. Sequence/clues use authored item counts.
+`QuestionPacks.counts` reads only the cached manifest and respects the saved
+language/category/difficulty filters. Imported counts describe matching inventory,
+not exact unseen remainder or remote provider inventory. Authored counts exclude
+seen content. Exhausted choices fall through to another format; no-repeat and
+filter rules remain authoritative. Missing manifests retain safe fallback paths
+without adding provider requests or eagerly reading all shards.
+
+Mixed sourcing now randomly tries repository or live content first with equal
+probability for each supported block, falling back to the other if necessary.
+This supersedes unconditional live-first selection. A local success needs no
+provider request; source blending does not add calls or widen filters. Manifest
+lookup failures are retried on demand after 60 seconds; concurrent lookups share
+one request and successful immutable manifests remain cached. A transient error
+must not strand every subsequent lobby on the tiny authored bank.
 
 Live tossups still use QB Reader; live short questions use OpenTDB. Unsupported
 answer rules and choice-dependent prompts are rejected. Live failures or missing
 format coverage use eligible repository content, with the original pack retained
 if generated assets cannot be loaded. No-repeat identity applies across live,
 imported, standalone and grouped content. Exhaustion pauses rather than changing
-saved filters. Imported shorts also feed Assigned and team Shootout; authored grouped,
+saved filters. Imported shorts also feed Assigned; authored grouped,
 sequence and four-clue formats retain their existing content.
 
-Shootout is team-only. Configuration parsing maps older FFA Shootout selections
-to one Snapper entry; engine readiness and catalog selection also normalize
-recovered sessions. The settings panel disables Shootout in FFA. Its questions
-stay in the shared short-question pool and play with ordinary Snapper rules.
-Existing blocks retain their rules until the next block boundary.
+Shootout is removed from both modes. Legacy configuration parsing maps it to a
+single Snapper entry. `migrateSession` runs before Durable Object presence recovery:
+it preserves the active question, scores, attempts and timer/answer-window IDs,
+converts an old block to Snapper ending after that question, and frees its unasked
+tail IDs. Obsolete retirement/cycle fields are removed; manual/challenge holds
+are preserved. Settings and format descriptions expose seven formats.
+
+Automatic judging recognizes conservative whole-word partials of accepted answers,
+including a complete date component such as `1970` for `January 1, 1970`. Explicit
+rejects take precedence; full aliases/typo acceptance stay unchanged. Correctly
+ordered incomplete sequences can prompt without partial credit. The existing
+single clarification gives a fresh fixed eight seconds; the UI explicitly asks
+for the full answer beside its refocused input. No hidden answer content is sent.
 
 Adding content: author QuestionAtoms with stable text, accurate category and
 language, a reviewed canonical answer, useful explicit aliases, and provenance.
@@ -186,7 +213,36 @@ by the local emulator. No production deployment has been performed yet.
 
 ## Verification log
 
-Random selection and team-only Shootout, verified locally on 2026-09-26:
+Partial clarification, question variety and complete Shootout removal, verified
+locally on 2026-09-26:
+
+- `npm test`: **136 passing tests**. Coverage includes the exact `1970` / `January
+  1, 1970` case, one fresh eight-second clarification, conservative rejection,
+  ordered prefixes, deterministic format weighting/filter changes, manifest-only
+  counts, source blending/fallback, pack recovery after temporary failure, and
+  idempotent recovery of old blocks without losing current play.
+- An offline real-pack audit of 1,000 continuous-session blocks produced 1,137
+  questions with zero repeated IDs. A separate fresh-lobby sample confirmed that
+  weighting substantially reduces recurrence from tiny authored pools. This is
+  not a cross-session no-repeat guarantee: last-player cleanup clears history,
+  and differently worded questions about the same fact can still occur.
+- `npm run test:integration`: **6 passing tests**. Real Worker/WebSocket checks
+  confirm both-mode legacy settings normalize to Snapper, questions stay novel,
+  and incomplete sequence answers prompt without scoring, leaking keys or
+  retaining drafts; a complete elaboration earns the full score.
+- Frontend/Worker typechecking, scoped lint, production build and Worker dry run
+  pass. No deployment was performed as part of this verification.
+- Interactive desktop/mobile checks confirm the prompt is visible beside the
+  refocused answer field, the countdown restarts, and a complete answer scores.
+  Both modes expose seven formats without Shootout, with the inventory-weighting
+  explanation in settings. Temporary local settings were restored and test
+  sessions closed.
+- Desktop/mobile dev and built smoke checks match with no overflow, console
+  errors or brand/auth warnings. Both viewport screenshots were reviewed
+  (`screenshots/snapper-prompt-dev*` and `snapper-prompt-built*`).
+
+Earlier random selection and team-only Shootout, verified locally on 2026-09-26
+(the team-only behavior below is superseded by complete removal):
 
 - `npm test`: **112 passing tests**. Deterministic distribution regressions
   exercise fresh-lobby openings, every position in multi-question samples and

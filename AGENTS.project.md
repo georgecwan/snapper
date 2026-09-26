@@ -62,10 +62,23 @@ verification plan.
   chat, and accept updates only from the current connection in its valid answer
   window. Pause freezes a draft; submission, timeout, clarification, departure,
   removal, tab takeover and question end clear it. Never persist draft text.
-- All eight text formats remain supported across modes. Shootout is team-only;
-  FFA uses its short questions as ordinary Snappers, with no retirement or
-  Shootout block. Normalize old FFA Shootout settings to Snapper without giving
-  Snapper duplicate weight. Preserve the equal-opportunity team rules.
+- Seven text formats remain supported. Shootout is removed in both modes; keep
+  its short questions available as ordinary Snappers and Assigned questions.
+  Normalize legacy Shootout settings to Snapper once. Recover an active legacy
+  block as a final-current-question Snapper and release its unasked tail back to
+  the pool. Preserve equal-opportunity Assigned rounds for unequal teams.
+- Select formats independently, weighted by matching question inventory under
+  the saved filters. Imported weights use manifest counts, not exhaustive reads
+  or provider API calls; skip exhausted pools without repeating questions.
+  Mixed sources randomly try local or live first with equal probability, then
+  fall back. Do not permanently cache failed pack loads or silently widen filters.
+  The existing session-only history means reopened lobbies can repeat questions;
+  do not add persistent recent-question history without owner approval.
+- Partial answers made of complete accepted words or date/number components
+  prompt once for a full answer (for example, 1970 for January 1, 1970), with a
+  fresh fixed eight-second window and no points. Explicit rejects win, accepted
+  aliases remain correct, and wrong/extra details or fragments do not qualify.
+  Ordered sequences may prompt for a correct prefix; no partial credit.
 - Free content retrieval must fall back to suitable reviewed repository packs.
   No repeated questions within a session; pause when all eligible content is
   exhausted. Keep source provenance and applicable attribution.

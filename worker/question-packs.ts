@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { CATEGORIES, type QuestionAtom } from "../src/snapper/protocol.ts";
-import { contentId, type RepositoryQuestionLoader } from "../src/snapper/catalog.ts";
+import {
+  contentId,
+  type RepositoryQuestionCounts,
+  type RepositoryQuestionLoader,
+} from "../src/snapper/catalog.ts";
 
 export const QUESTION_PACK_PREFIX = "/_question-packs";
 
@@ -136,12 +140,15 @@ function sample(
 /** Server-only immutable repository packs. Nothing here exposes an HTTP route. */
 export class QuestionPacks {
   private assets: Assets;
+  private now: () => number;
   private manifest: Promise<Manifest | null> | null = null;
+  private manifestRetryAt = 0;
   private indexes = new BoundedCache<PackIndex>(8, 2 * 1024 * 1024);
   private shards = new BoundedCache<QuestionAtom[]>(8, 2 * 1024 * 1024);
 
-  constructor(assets: Assets) {
+  constructor(assets: Assets, now: () => number = Date.now) {
     this.assets = assets;
+    this.now = now;
   }
 
   private async read(path: string, maxBytes: number): Promise<{ value: unknown; bytes: number }> {
@@ -181,9 +188,18 @@ export class QuestionPacks {
   }
 
   private getManifest(): Promise<Manifest | null> {
+    if (this.manifest) return this.manifest;
+    if (this.now() < this.manifestRetryAt) return Promise.resolve(null);
     this.manifest ??= this.read("manifest.json", 128 * 1024)
       .then(({ value }) => manifestSchema.parse(value))
-      .catch(() => null);
+      .catch(() => {
+        // A temporary asset failure must not strand this isolate on the small
+        // authored fallback forever. Retry only on demand, at most once per
+        // minute; concurrent callers share this promise. Success stays cached.
+        this.manifestRetryAt = this.now() + 60_000;
+        this.manifest = null;
+        return null;
+      });
     return this.manifest;
   }
 
@@ -213,6 +229,21 @@ export class QuestionPacks {
     this.shards.set(path, atoms, bytes);
     return atoms;
   }
+
+  /** Inventory weighting reads only the shared manifest, never indexes or answer shards. */
+  readonly counts: RepositoryQuestionCounts = async (config) => {
+    const counts = { tossup: 0, snapper: 0 };
+    if (config.language !== "en") return counts;
+    const manifest = await this.getManifest();
+    if (!manifest) throw new Error("Repository question inventory unavailable");
+    for (const group of manifest.groups)
+      if (
+        config.categories.includes(group.category) &&
+        (config.difficulty === "any" || group.difficulty === config.difficulty)
+      )
+        counts[group.format] += group.count;
+    return counts;
+  };
 
   readonly select: RepositoryQuestionLoader = async (format, config, usedIds, count, random) => {
     if (count < 1 || count > 32 || config.language !== "en") return [];

@@ -2,7 +2,7 @@
 
 A shared trivia game for friends, inspired by Reach for the Top and Protobowl.
 One owner opens the lobby and approves guests. Up to 16 players and 16 spectators
-can join; games support free-for-all or two teams and eight text question formats.
+can join; games support free-for-all or two teams and seven text question formats.
 
 ## Project context
 
