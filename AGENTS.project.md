@@ -79,10 +79,13 @@ verification plan.
   fall back. Do not permanently cache failed pack loads or silently widen filters.
   The existing session-only history means reopened lobbies can repeat questions;
   do not add persistent recent-question history without owner approval.
-- Partial answers made of complete accepted words or date/number components
-  prompt once for a full answer (for example, 1970 for January 1, 1970), with a
-  fresh fixed eight-second window and no points. Explicit rejects win, accepted
-  aliases remain correct, and wrong/extra details or fragments do not qualify.
+- Judging tolerates common misspellings and adjacent-letter swaps in words of
+  five or more letters, with a small length-based edit budget. Harmless omitted
+  articles, "of" and "and" may pass when all meaningful words remain. Partial
+  answers, including near-miss spellings, prompt once for missing key details
+  (for example, 1970 for January 1, 1970), with a fresh eight-second window and
+  no points. Exact authored rejects win; exact accepted answers remain correct.
+  Keep short words, numbers, signs, negation and wrong extra details strict.
   Ordered sequences may prompt for a correct prefix; no partial credit.
 - Free content retrieval must fall back to suitable reviewed repository packs.
   No repeated questions within a session; pause when all eligible content is

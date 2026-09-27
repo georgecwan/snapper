@@ -164,8 +164,13 @@ tossup or standalone Snapper can be a one-question block.
   compensation scheme is required. Geographic/network delay can still matter.
 - Keep future words, clues and answer keys off all participant devices until
   their reveal point. This includes owners, moderators and spectators.
-- Answers are typed and judged automatically, with accepted aliases and
-  conservative typo tolerance. Do not use unrestricted substring matching.
+- Answers are typed and judged automatically, with accepted aliases and forgiving
+  spelling. The owner's request for looser judging supersedes the original
+  conservative cutoff: words of five or more letters allow a small number of
+  edits based on length, and adjacent-letter swaps count as one typo. Harmless
+  omitted articles, "of" and "and" can count as correct when all meaningful
+  words remain. Short words, numeric values and signs stay exact. Do not use
+  unrestricted substring matching or accept competing/negated answers.
 - While the current answerer types, all admitted players and spectators see
   their unsubmitted answer text live. Typing alone does not create an attempt,
   change scores or enter chat/history. Pressing Enter submits early; at the
@@ -182,12 +187,13 @@ tossup or standalone Snapper can be a one-question block.
   existing draft; editing resumes in the same answer window after the pause.
   A participant joining during an answer sees the latest valid draft.
 - An insufficiently specific answer gets one clarification attempt with a fresh
-  **8-second** timer. Authored prompt aliases and conservative complete-word
-  partials qualify: **1970** for **January 1, 1970** prompts for the full answer.
+  **8-second** timer. Authored prompt aliases, complete-word partials and close
+  spellings of those partials qualify: **1970** for **January 1, 1970**, or
+  **Roosevel** for **Theodore Roosevelt**, prompt for the missing details.
   Correct ordered sequence prefixes or correctly positioned partial names can
   also prompt. This awards no points and reveals no missing answer details.
   Explicit rejections take precedence; accepted aliases still count as correct.
-  Wrong extra words, negations, digit/word fragments and wrong sequence order do
+  Wrong extra words, negations, numeric fragments, distant word fragments and wrong sequence order do
   not qualify. A second incomplete response is incorrect. Show a clear prompt
   beside the answer field and focus the new answer window. Prefill that field
   with the same player's previous submitted answer and place the caret at its

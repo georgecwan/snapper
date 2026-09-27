@@ -12,7 +12,7 @@ reasoning; it is not a description of the active runtime.
   Import types here in UI; **never import bank, catalog or engine into UI**.
 - `src/snapper/engine.ts`: deterministic session state machine. The server passes
   timestamps and selected content in; no browser is authoritative for rules.
-- `src/snapper/judge.ts`: authored aliases, explicit clarifications and conservative
+- `src/snapper/judge.ts`: authored aliases, explicit clarifications and word-aware
   typo tolerance. Ordered answers require every item in order.
 - `src/snapper/catalog.ts`: filtered format selection, source adapters and
   normalized-content identity. Live fetches are session-only; explicit licensed
@@ -244,9 +244,15 @@ converts an old block to Snapper ending after that question, and frees its unask
 tail IDs. Obsolete retirement/cycle fields are removed; manual/challenge holds
 are preserved. Settings and format descriptions expose seven formats.
 
-Automatic judging recognizes conservative whole-word partials of accepted answers,
-including a complete date component such as `1970` for `January 1, 1970`. Explicit
-rejects take precedence; full aliases/typo acceptance stay unchanged. Correctly
+Automatic judging tolerates one edit per five letters (at most three) in words
+of at least five letters, including adjacent-letter transpositions, with a total
+budget of at most three edits for a complete answer. Short words and non-letter
+tokens remain exact. Omitting articles, `of` or `and` is accepted only when at
+least two meaningful words remain and all of them match. Exact authored rejects
+win, exact accepted answers retain priority over nearby rejected spellings, and
+authored prompt rules cannot be bypassed through omission. Close spellings of
+partial words prompt for elaboration instead of being immediately rejected,
+as do complete date components such as `1970` for `January 1, 1970`. Correctly
 ordered incomplete sequences can prompt without partial credit. The existing
 single clarification gives a fresh fixed eight seconds; the UI explicitly asks
 for the full answer beside its refocused input. The clarification field starts
@@ -313,6 +319,24 @@ by the local emulator. Verify updates on the public origin after deployment,
 without changing an active game to run QA.
 
 ## Verification log
+
+More forgiving judging and session non-repetition, verified on 2026-09-26:
+
+- **182 unit tests** and **7 multiplayer integration tests** pass, as do typecheck,
+  scoped lint and the production build. New regressions cover transpositions,
+  short-word/numeric safeguards, harmless omissions, close partials, authored
+  rejects, ordered sequences and manual/deadline clarification scoring.
+- Existing session history is retained across skipped questions, score resets,
+  settings/mode changes, reconnection and serialized-state recovery. New tests
+  also verify duplicate question text with different provider IDs, capitalization,
+  spacing or punctuation is not reused in another format. Exhausted pools stop
+  rather than relax history or filters. A new session deliberately starts fresh.
+- In the browser, `Albrta` prompted and the completed
+  `Albrta, Saskatchwan, Manitboa` was accepted at the deadline. Advancing the
+  one-question test pool showed the no-unseen-questions pause without replaying
+  its question. Local test settings were restored afterward.
+- Development and built output render cleanly at desktop/mobile sizes with a
+  matching baseline (`screenshots/snapper-forgiving-*`).
 
 Clarification input prefill, verified locally on 2026-09-26:
 

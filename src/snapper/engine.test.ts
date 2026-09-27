@@ -738,6 +738,30 @@ test("used questions cannot be replayed or duplicated inside a selected bundle",
   assert.equal(startBlock(s, bundle("open", [atom(99), atom(99), atom(100)]), 0), s);
 });
 
+test("session question history survives skips, score resets, settings changes and snapshot recovery", () => {
+  let state = start("open", [person("a", "A"), person("b", "B")]);
+  const seen = [...state.usedIds];
+  state = act(state, "a", { type: "skip" });
+  state = act(state, "a", { type: "reset-scores" });
+  state = configureSession(
+    state,
+    { ...state.config, mode: "teams", source: "bundled", difficulty: "any" },
+    1,
+  );
+  state = act(state, "a", { type: "end-block" }, 2);
+  state = setConnected(state, "b", false, 3);
+  state = setConnected(state, "b", true, 4);
+  state = migrateSession(JSON.parse(JSON.stringify(state)) as Session, 5);
+  assert.deepEqual(state.usedIds, seen);
+  assert.equal(state.needsBlock, true);
+  assert.equal(state.config.mode, "teams");
+  assert.equal(startBlock(state, bundle("snapper", [atom(0)]), 6), state);
+  assert.equal(startBlock(state, bundle("assigned", [atom(1), atom(99)]), 6), state);
+  assert.notEqual(startBlock(state, bundle("snapper", [atom(99)]), 6), state);
+  const fresh = initial();
+  assert.deepEqual(fresh.usedIds, [], "only a new session resets question history");
+});
+
 test("state transitions do not mutate snapshots held by the coordinator", () => {
   const s = start("snapper"),
     before = JSON.stringify(s);

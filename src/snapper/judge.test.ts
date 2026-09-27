@@ -4,7 +4,7 @@ import { judgeAnswer, normalizeAnswer } from "./judge.ts";
 import type { AnswerSpec } from "./protocol.ts";
 
 const mitochondria: AnswerSpec = { canonical: "mitochondria", aliases: ["mitochondrion"] };
-test("exact answers, authored aliases and conservative spelling are accepted", () => {
+test("exact answers, authored aliases and close spelling are accepted", () => {
   assert.equal(judgeAnswer("The mitochondrion", mitochondria), "accept");
   assert.equal(judgeAnswer("MITOCHONDRIA", mitochondria), "accept");
   assert.equal(judgeAnswer("mitochodria", mitochondria), "accept");
@@ -62,9 +62,6 @@ test("partial prompting does not rescue wrong words, fragments, signs or alterna
   for (const text of [
     "Franklin Roosevelt",
     "Roose",
-    "Roosevel",
-    "Tedy",
-    "Theodores",
     "Roosevelt Theodore",
     "Roosevelt Roosevelt",
     "not Roosevelt",
@@ -87,6 +84,79 @@ test("partial prompting does not rescue wrong words, fragments, signs or alterna
     ["Paul", "Jean-Paul Sartre"],
   ])
     assert.equal(judgeAnswer(text!, { canonical: canonical!, aliases: [] }), "reject", text);
+});
+test("common typos, swapped letters and harmless missing words are accepted", () => {
+  for (const [text, canonical] of [
+    ["Prais", "Paris"],
+    ["Pariss", "Paris"],
+    ["Einstien", "Einstein"],
+    ["mitocondrea", "mitochondria"],
+    ["William Shakespere", "William Shakespeare"],
+    ["Januray 1, 1970", "January 1, 1970"],
+    ["United States America", "United States of America"],
+    ["War Peace", "War and Peace"],
+    ["University California", "University of California"],
+  ]) {
+    const spec = { canonical: canonical!, aliases: [] };
+    assert.equal(judgeAnswer(text!, spec), "accept", text);
+    assert.equal(judgeAnswer(text!, spec, true), "accept", `clarification: ${text}`);
+  }
+});
+test("close partial spellings prompt once without granting points for missing key details", () => {
+  const spec = { canonical: "Theodore Roosevelt", aliases: ["Teddy Roosevelt"] };
+  for (const text of ["Roosevel", "Roosevlet", "Tedy", "Theodores"]) {
+    assert.equal(judgeAnswer(text, spec), "prompt", text);
+    assert.equal(judgeAnswer(text, spec, true), "reject", text);
+  }
+  assert.equal(
+    judgeAnswer("Universty", { canonical: "University of California", aliases: [] }),
+    "prompt",
+  );
+  assert.equal(judgeAnswer("Roosevel", { ...spec, promptAliases: ["Roosevelt"] }), "prompt");
+  assert.equal(judgeAnswer("Roosevel", { ...spec, rejects: ["Roosevelt"] }), "reject");
+});
+test("looser matching preserves distinct short answers, wrong details and authored rejects", () => {
+  for (const [text, canonical] of [
+    ["Iraq", "Iran"],
+    ["Mars", "cars"],
+    ["nitrogen", "hydrogen"],
+    ["Apollo 12", "Apollo 11"],
+    ["January 2, 1970", "January 1, 1970"],
+    ["January 1, 1971", "January 1, 1970"],
+    ["negative 5", "positive 5"],
+    ["not Paris", "Paris"],
+    ["Paris or London", "Paris"],
+    ["University Texas", "University of California"],
+    ["North Korea", "South Korea"],
+  ])
+    assert.equal(judgeAnswer(text!, { canonical: canonical!, aliases: [] }), "reject", text);
+  const painter = { canonical: "Monet", aliases: [], rejects: ["Manet"] };
+  assert.equal(
+    judgeAnswer("Monet", painter),
+    "accept",
+    "correct exact answer wins over nearby rejected spelling",
+  );
+  assert.equal(judgeAnswer("Mnaet", painter), "reject");
+  assert.equal(judgeAnswer("Manet", painter), "reject");
+  assert.equal(
+    judgeAnswer("War Peace", {
+      canonical: "War and Peace",
+      aliases: [],
+      promptAliases: ["War Peace"],
+    }),
+    "prompt",
+  );
+});
+test("ordered responses allow spelling mistakes but still need every item in order", () => {
+  const spec = {
+    canonical: "Mercury, Venus, Earth",
+    aliases: [],
+    orderedItems: [["Mercury"], ["Venus"], ["Earth"]],
+  };
+  assert.equal(judgeAnswer("Mercuy, Vneus, Eatrh", spec), "accept");
+  assert.equal(judgeAnswer("Mercuy, Vneus", spec), "prompt");
+  assert.equal(judgeAnswer("Mercuy, Vneus", spec, true), "reject");
+  assert.equal(judgeAnswer("Vneus, Mercuy, Eatrh", spec), "reject");
 });
 test("a complete numeric or date component prompts once without accepting fragments or changing signs", () => {
   const epoch: AnswerSpec = { canonical: "january 1, 1970", aliases: [] };

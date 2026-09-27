@@ -571,6 +571,49 @@ test("repeated live results fall through to unseen repository questions then exh
   assert.equal(new Set(used).size, 3);
 });
 
+test("provider IDs and cosmetic text changes cannot repeat a question in another format", async () => {
+  const first = packedQuestion(71);
+  const second = packedQuestion(72);
+  const duplicate = {
+    ...first,
+    id: "another-provider-id",
+    text: first.text.toUpperCase().replaceAll(" ", "   ").replace(".", "?"),
+    provenance: { label: "Different provider", license: "CC0" },
+  };
+  const matching = {
+    ...config,
+    mode: "ffa" as const,
+    categories: ["Science" as const],
+    difficulty: "hard" as const,
+  };
+  const used = bundledOptions("snapper", matching, [], players).flatMap((bundle) =>
+    bundle.atoms.map((atom) => atom.id),
+  );
+  const load = async () => [first, duplicate, second];
+  for (const [round, format] of (["snapper", "assigned", "snapper"] as const).entries()) {
+    const selected = await selectBundle(
+      { ...matching, formats: [format] },
+      used,
+      players.slice(0, 1),
+      async () => {
+        throw new Error("Bundled selection must not call a provider");
+      },
+      () => 0,
+      load,
+    );
+    if (round === 2) {
+      assert.equal(selected.bundle, null);
+      assert.match(selected.message!, /No unseen questions/);
+    } else {
+      assert.ok(selected.bundle);
+      const id = selected.bundle.atoms[0]!.id;
+      assert.ok(!used.includes(id));
+      assert.equal(id, round === 0 ? first.id : second.id);
+      used.push(id);
+    }
+  }
+});
+
 test("an unavailable local-first pool still falls back to the live source", async () => {
   let requests = 0;
   const selected = await selectBundle(

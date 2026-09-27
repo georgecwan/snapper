@@ -6,6 +6,7 @@ import {
   nextDeadline,
   publicView,
   startBlock,
+  tick,
   transition,
   type Session,
 } from "./engine.ts";
@@ -156,4 +157,34 @@ test("an authored reject for the year overrides inferred date clarification", ()
   );
   assert.equal(view.question!.answer, null);
   assert.equal(publicView(state, "host", 2000).canBuzz, true);
+});
+
+test("misspelled partials prompt once and typed or timed complete answers score normally", () => {
+  for (const timed of [false, true]) {
+    let state = answering();
+    const first = publicView(state, "guesser", 1000);
+    state = timed
+      ? tick(state, first.deadline!, { answerWindowId: first.answerWindowId!, text: "Januray" })
+      : act(state, "guesser", { type: "answer", text: "Januray" }, 2000);
+    const prompted = publicView(state, "guesser", 4000);
+    assert.equal(prompted.attempts[0]!.verdict, "prompt");
+    assert.equal(prompted.attempts[0]!.points, 0);
+    assert.equal(prompted.canAnswer, true);
+    state = timed
+      ? tick(state, prompted.deadline!, {
+          answerWindowId: prompted.answerWindowId!,
+          text: "Januray 1, 1970",
+        })
+      : act(state, "guesser", { type: "answer", text: "Januray 1, 1970" }, 5000);
+    const accepted = publicView(state, "guesser", 12_000);
+    assert.deepEqual(
+      accepted.attempts.map((attempt) => attempt.verdict),
+      ["prompt", "accept"],
+    );
+    assert.equal(
+      accepted.players.find((entry) => entry.id === "guesser")!.score,
+      DEFAULT_CONFIG.points.regular,
+    );
+    assert.equal(accepted.phase, "reveal");
+  }
 });
