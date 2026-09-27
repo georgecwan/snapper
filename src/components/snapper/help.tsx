@@ -78,7 +78,8 @@ function HowToPlay() {
         <h3>Buzz, then type</h3>
         <p>
           Press Space or tap Buzz when you know the answer. If you win the buzz, type your answer
-          and press Enter before time runs out. Everyone can see your guess as you type.
+          and press Enter to submit early, or let the timer submit what you have typed. An empty
+          answer times out. Everyone can see your guess as you type.
         </p>
         <p>A wrong answer usually locks you or your team out for the rest of that question.</p>
       </section>

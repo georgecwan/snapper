@@ -245,9 +245,7 @@ export class Lobby extends DurableObject<Env> {
 
   private async advance(now = Date.now()): Promise<boolean> {
     if (!this.record) return false;
-    const before = this.record.game;
-    this.record.game = tick(before, now);
-    let changed = this.record.game.revision !== before.revision;
+    let changed = this.tick(now);
     if (
       this.record.contentBlocked &&
       this.record.waitingForPlayers &&
@@ -301,6 +299,21 @@ export class Lobby extends DurableObject<Env> {
       }
     }
     return changed;
+  }
+
+  private tick(now: number): boolean {
+    if (!this.record) return false;
+    const before = this.record.game;
+    const answerer = before.question?.answerer;
+    const draft = answerer
+      ? this.answerDrafts.takeExpired(
+          publicView(before, answerer, now),
+          this.record.connections[answerer],
+          now,
+        )
+      : null;
+    this.record.game = tick(before, now, draft);
+    return this.record.game.revision !== before.revision;
   }
 
   private prunePending(now = Date.now()): boolean {
@@ -520,7 +533,9 @@ export class Lobby extends DurableObject<Env> {
         const validated = configSchema.safeParse(input.config);
         if (!validated.success) return failure("Invalid settings.");
         if (this.record) {
-          this.record.game = configureSession(this.record.game, validated.data, Date.now());
+          const now = Date.now();
+          this.tick(now);
+          this.record.game = configureSession(this.record.game, validated.data, now);
           this.record.contentBlocked = false;
           this.record.waitingForPlayers = false;
           this.record.notice = null;
@@ -688,7 +703,7 @@ export class Lobby extends DurableObject<Env> {
       // Use one instant for the deadline transition, stale-question check and action.
       // Otherwise a boundary between projection and transition could buzz the next question.
       const actionNow = Date.now();
-      this.record.game = tick(this.record.game, actionNow);
+      this.tick(actionNow);
       const current = publicView(this.record.game, id.pid, actionNow);
       let message: string | undefined;
       const questionActions = [
@@ -707,6 +722,11 @@ export class Lobby extends DurableObject<Env> {
         command.questionId !== (current.question?.id ?? null)
       )
         message = "That question has changed. Please try again.";
+      else if (
+        command.action.type === "answer" &&
+        (!command.answerWindowId || command.answerWindowId !== current.answerWindowId)
+      )
+        message = "That answer window has ended.";
       else message = await this.apply(command, id, actionNow);
       if (!this.record) return;
       this.record.receipts.push({

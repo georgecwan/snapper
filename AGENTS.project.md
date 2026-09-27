@@ -8,13 +8,14 @@ verification plan.
 
 ## Status and interpretation
 
-- The **Snapper** implementation is locally verified. Read `docs/implementation.md`
-  for entry points, verification results and outstanding deployment setup. The
+- **Snapper** is deployed at `https://snapper.gw9999-cloudflare.workers.dev`.
+  Read `docs/implementation.md` for entry points and verification results. The
   older Lectern modules are legacy references, not the active product.
 - `docs/cloudflare-setup.md` contains account setup, verified free quotas and
   deployment steps. Cloudflare Workers Builds with GitHub is the preferred deploy
-  flow; once connected, pushes to `main` deploy automatically. No connection has
-  been configured by this agent. Vercel Git deployments are disabled.
+  flow; the existing connection deploys pushes to `main` automatically. Workers
+  Free and configured production sign-in were confirmed on 2026-09-26. Preserve
+  the existing runtime variables and secrets. Vercel Git deployments are disabled.
 - `data/README.md` describes the licensed repository question snapshots and
   generated bank. Read it before editing imports. Do not expose raw question
   packs through `public/`, frontend imports, asset rewrites, or an API. Keep
@@ -22,7 +23,6 @@ verification plan.
   unrevealed-answer boundary. Builds do not download question sources.
 - All final gameplay defaults and progression rules have been approved. Continue
   implementation within that contract; do not restart requirements discovery.
-  No production deployment has been made by this implementation session.
 - Confirmed requirements are decisions already made with the owner. Do not ask
   them again unless new evidence creates a concrete conflict. Proposals and open
   items are not approved behavior; ask about consequential product choices
@@ -60,8 +60,10 @@ verification plan.
 - The current answerer's unsubmitted text is visible live to admitted players
   and spectators. Keep drafts transient, separate from scoring, attempts and
   chat, and accept updates only from the current connection in its valid answer
-  window. Pause freezes a draft; submission, timeout, clarification, departure,
-  removal, tab takeover and question end clear it. Never persist draft text.
+  window. At the server deadline, submit the latest nonblank accepted draft as
+  an ordinary answer (including clarification); an empty field times out.
+  Pause freezes a draft; submission, clarification, departure, removal, tab
+  takeover and question end clear it. Never persist unsubmitted draft text.
 - Seven text formats remain supported. Shootout is removed in both modes; keep
   its short questions available as ordinary Snappers and Assigned questions.
   Normalize legacy Shootout settings to Snapper once. Recover an active legacy

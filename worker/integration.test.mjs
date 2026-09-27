@@ -133,6 +133,7 @@ class Client {
       id,
       sessionId: this.state.sessionId,
       questionId: this.state.question?.id ?? null,
+      ...(action.type === "answer" ? { answerWindowId: this.state.answerWindowId } : {}),
       action,
     };
     this.socket.send(JSON.stringify(command));
@@ -747,9 +748,9 @@ test(
     assert.equal(owner.state.answerWindowId, null);
     assert.equal(owner.state.config.answerMs, 3000);
     await ack(owner, { type: "buzz" });
-    owner.draft("An unfinished answer must not be submitted on timeout");
+    owner.draft("An unfinished answer is submitted at the time limit");
     await draftVisible(
-      "An unfinished answer must not be submitted on timeout",
+      "An unfinished answer is submitted at the time limit",
       "timeout draft is visible",
     );
     await eventually(
@@ -760,8 +761,8 @@ test(
     await draftVisible("", "timeout clears live text");
     assert.equal(
       owner.state.attempts[0].answer,
-      "",
-      "Timeout must not submit the draft as an answer",
+      "An unfinished answer is submitted at the time limit",
+      "The deadline submits the last accepted draft as an ordinary answer",
     );
     assert.equal(owner.state.attempts[0].verdict, "reject");
     assert.equal(owner.state.answerWindowId, null);
@@ -913,7 +914,7 @@ test(
 );
 
 test(
-  "an incomplete ordered answer gets one fresh clarification window without scoring or leaking the key",
+  "deadline submissions prompt once, reject a delayed manual answer, and score the completed clarification",
   { skip: !origin, timeout: 30_000 },
   async (t) => {
     assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname));
@@ -950,7 +951,7 @@ test(
         difficulty: "any",
         shortProgressive: false,
         autoAdvance: false,
-        sequenceMs: 20_000,
+        sequenceMs: 5000,
         graceMs: 30_000,
         points: { ...owner.state.config.points, sequence: 20 },
       },
@@ -985,14 +986,13 @@ test(
       "the incomplete unsubmitted draft is visible",
     );
     assert.equal(owner.state.attempts.length, 0);
-    const submittedAt = Date.now();
-    await ack(friend, { type: "answer", text: "Alberta" });
     await eventually(
       () =>
         [owner, friend, spectator].every(
           (client) => client.state.attempts[0]?.verdict === "prompt",
         ),
       "all participants receive the clarification ruling",
+      10_000,
     );
     for (const client of [owner, friend, spectator]) {
       assert.equal(client.state.phase, "answering");
@@ -1009,20 +1009,35 @@ test(
       assert.equal(client.state.question.provenance, null);
       assert.doesNotMatch(JSON.stringify(client.state), /Saskatchewan|Manitoba/);
       assert.equal(client.state.answerDraft, "", "clarification clears the previous draft");
-      assert.ok(client.state.deadline >= submittedAt + 8000);
-      assert.ok(client.state.deadline <= Date.now() + 8000);
-      assert.ok(
-        client.state.deadline < initialDeadline,
-        "the fresh timer is eight, not twenty seconds",
-      );
+      assert.equal(client.state.deadline, initialDeadline + 8000);
     }
     assert.equal(friend.state.canAnswer, true);
     assert.equal(owner.state.canAnswer, false);
     assert.equal(spectator.state.canAnswer, false);
-    await ack(friend, { type: "answer", text: "Alberta, Saskatchewan, Manitoba" });
+    const delayed = {
+      id: crypto.randomUUID(),
+      sessionId: friend.state.sessionId,
+      questionId,
+      answerWindowId: initialWindow,
+      action: { type: "answer", text: "Alberta, Saskatchewan, Manitoba" },
+    };
+    friend.socket.send(JSON.stringify(delayed));
+    assert.match((await friend.result(delayed)).message, /answer window has ended/);
+    assert.equal(
+      friend.state.attempts.length,
+      1,
+      "a late manual submit cannot consume clarification",
+    );
+    friend.draft("Alberta, Saskatchewan, Manitoba");
+    await eventually(
+      () => owner.state.answerDraft === "Alberta, Saskatchewan, Manitoba",
+      "completed draft reaches the server",
+    );
+    assert.equal(owner.state.attempts.length, 1, "typing is not an early submission");
     await eventually(
       () => [owner, friend, spectator].every((client) => client.state.phase === "reveal"),
       "the completed sequence is accepted",
+      11_000,
     );
     for (const client of [owner, friend, spectator]) {
       assert.deepEqual(

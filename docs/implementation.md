@@ -48,11 +48,17 @@ other browsers. Public question IDs do not disclose source IDs or answer words.
 The server sends only the revealed question prefix and retains full answer rules.
 
 Live guesses use a separate `answer-draft` WebSocket frame, scoped to the session,
-question and answer attempt. `src/snapper/answer-draft.ts` coalesces edits to five
-updates per second; `worker/answer-drafts.ts` independently validates and limits
+question and answer attempt. `src/snapper/answer-draft.ts` normally coalesces edits
+to five updates per second, then flushes promptly near the deadline;
+`worker/answer-drafts.ts` independently validates and limits
 them. Only the current answerer's current connection can publish. Drafts live in
-memory, outside engine actions, storage and command receipts, and never score or
-extend a timer. Snapshots include the current draft for new observers. Pause
+memory, outside storage and command receipts. Typing does not score or extend a
+timer. At the authoritative deadline the coordinator consumes the latest accepted
+draft once and passes it to `tick` for ordinary judging; blank text remains a
+timeout. Partial answers may prompt for the usual fresh eight seconds. Drafts
+are never reused across attempts or recovered from storage. Manual answer
+commands carry the visible answer-window ID so a delayed command cannot consume
+a clarification created by automatic submission. Snapshots include the current draft for new observers. Pause
 freezes it; attempt changes, departure and connection replacement clear it.
 The input is also scoped to its connection and seat so reconnecting cannot
 republish an old guess. Socket projections update in message order before React
@@ -147,10 +153,32 @@ The original Vite configuration's TanStack Start/Nitro path remains available as
 keeps the PWA/branding plugin, and does not initialize PostgreSQL or PGLite.
 The old `/api/rtc` route has been retired. Existing platform helpers remain intact.
 `vercel.json` disables automatic Git deployments to the retired Vercel target.
-Cloudflare Workers Builds is the preferred deployment flow: once the owner connects
-GitHub, pushes to `main` build and deploy automatically. The agent has not configured
-that account connection. `keep_vars: true` preserves dashboard-managed runtime
+Cloudflare Workers Builds is connected to GitHub: pushes to `main` build and deploy
+automatically (confirmed in the dashboard on 2026-09-26). `keep_vars: true` preserves dashboard-managed runtime
 values on subsequent deployments; secrets are also retained.
+
+## Link previews
+
+`public/og.svg` and `public/x-banner.svg` are the editable share artwork, with
+outlined text so regeneration does not depend on installed fonts. Run
+`npm run build:brand` after editing them; commit both generated JPEGs. The main
+card is 1200×630 and the separately composed wide banner is 1200×264.
+
+`src/lib/og/site.json` holds the shared title, description, image alternative
+text and image version. Increment `imageVersion` when replacing the artwork to
+give crawlers a fresh image URL. The Vite template still handles development
+metadata. On Cloudflare, `worker/share-metadata.ts` replaces share tags in the
+initial HTML with complete Open Graph and large-image Twitter card metadata,
+using the request origin. This supersedes the old build-time
+`VITE_PUBLIC_HOSTNAME` requirement and works before owner auth is configured.
+Canonical URLs exclude query parameters; no live game data is used. Platform
+branding and PWA tags are retained, and the private-asset guard still runs first.
+
+After building and starting the built preview, `npm run check:share` checks raw
+HTML as four crawler user agents, validates public JPEG bytes/dimensions, and
+checks the API, installation tutorial and private question-pack boundary.
+It makes only read requests and accepts an optional origin argument. Actual
+messaging services may retain previously cached page previews after deployment.
 
 ## Question content
 
@@ -229,7 +257,14 @@ Use `promptAliases` only when asking for clarification is meaningful. Sequences
 need `orderedItems`; clues need four authored clues. Tossup `powerAt` is a
 **visible character offset**, not a word count. Keep all answer keys server-only.
 
-## Deployment setup still required
+## Production deployment
+
+The existing game is [Snapper](https://snapper.gw9999-cloudflare.workers.dev).
+On 2026-09-26, the dashboard showed Workers Free ($0) as the current plan and
+successful automatic builds from `georgecwan/snapper` on `main`. Production
+reports `ownerConfigured: true` and `devAuth: false`. The local Wrangler OAuth
+session is also authenticated. Preserve the existing runtime settings and secrets;
+the setup walkthrough below is only needed for a fresh account.
 
 For the full account/sign-in walkthrough and quota table, use
 [Cloudflare setup](cloudflare-setup.md).
@@ -255,9 +290,8 @@ reduce unwanted use but rejected requests still consume some quota.
    characters) and `GITHUB_CLIENT_SECRET` with type **Secret**, then deploy the
    settings. Never commit real secrets or
    copy the local development secret into production.
-5. Set `VITE_PUBLIC_HOSTNAME` under **Settings → Builds → Build variables and
-   secrets** to the production hostname for absolute share-image metadata. Build
-   variables do not configure runtime authentication. Future `main` pushes deploy
+5. Share-image metadata uses the requested game origin automatically; no
+   `VITE_PUBLIC_HOSTNAME` build setting is required. Future `main` pushes deploy
    automatically. Manual `npm run deploy` remains available to an authenticated
    developer, but local Wrangler login is unnecessary for the dashboard flow.
    **Never deploy `--env local`.**
@@ -267,12 +301,46 @@ reduce unwanted use but rejected requests still consume some quota.
 The [Cloudflare pricing documentation](https://developers.cloudflare.com/durable-objects/platform/pricing/)
 was rechecked on 2026-09-26: Workers Free supports SQLite Durable Objects and
 rejects operations beyond its free limits. This guarantee depends on retaining
-the Free account plan. The local Wrangler session is currently unauthenticated.
+the Free account plan, confirmed in the dashboard on that date.
 
 Production OAuth, geographic latency and real Free-plan usage cannot be verified
-by the local emulator. No production deployment has been performed yet.
+by the local emulator. Verify updates on the public origin after deployment,
+without changing an active game to run QA.
 
 ## Verification log
+
+Automatic answer submission, verified locally on 2026-09-26:
+
+- `npm test`: **175 passing tests**. Deadline judging covers correct, wrong,
+  empty and whitespace-only drafts, single-use consumption, pauses, disconnected
+  players, stale attempts, clarification and delayed deadline callbacks. Draft
+  tests verify that late frames cannot replace/discard a valid pending answer,
+  and that final edits/deletions flush promptly near expiry.
+- `npm run test:integration`: **7 passing tests** against the local Worker.
+  Live WebSockets verify automatic partial-answer prompting, rejection of a late
+  manual answer from the original window, automatic clarification scoring,
+  draft cleanup and the existing multiplayer permission/recovery boundaries.
+- Frontend/Worker typechecking, scoped lint and the production build pass.
+  Browser checks verify automatic scoring without Enter and a mobile partial
+  answer receiving a new, empty clarification field. Temporary test settings
+  are restored after QA. No production deployment is part of this update.
+- Final development and built desktop/mobile smoke verdicts match, with no
+  overflow or console errors. All four screenshots were visually reviewed
+  (`screenshots/snapper-autosubmit-*`).
+
+Share previews, verified locally on 2026-09-26:
+
+- Main and wide JPEGs visually reviewed at 1200×630 / 1200×264, approximately
+  85 kB / 48 kB. Brand generation is repeatable and passes the brand gate.
+- Production build, frontend/Worker typechecking, scoped lint and formatting
+  checks pass. `check:share` passes against the built Worker for four crawler
+  user agents without cookies or JavaScript, including image bytes/dimensions,
+  metadata uniqueness, query-free canonical URLs and preserved private assets.
+- Development and built desktop/mobile smoke checks pass and match, with visible
+  content, no overflow, no console errors and no brand/auth warnings. All four
+  viewport screenshots were visually reviewed (`screenshots/snapper-share-*`).
+- No production deployment or external messaging-service cache refresh was
+  performed. The updated share card takes effect when this revision is deployed.
 
 Keyboard controls, Help and distinct sounds, verified locally on 2026-09-26:
 
@@ -457,8 +525,8 @@ Verified locally on 2026-09-25/26:
   credentials; neither was present. An independent review checked Worker role
   validation, projection, recovery and socket replacement.
 
-Live GitHub authentication and hosting have **not** been verified: deployment
-credentials and a chosen Cloudflare Free account are still required. Browser QA
+The initial verification did not cover live GitHub authentication or hosting;
+see the production status above for subsequent deployment checks. Browser QA
 used Chromium and responsive viewport emulation; physical iPhone/Android keyboard
 behavior and Safari/Firefox should be checked in the first real game night.
 The inherited template checks are retained separately as `test:template`; their

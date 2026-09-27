@@ -40,6 +40,27 @@ test("draft typing sends promptly, coalesces rapid edits, and shares deletion", 
   assert.equal(sent.at(-1)?.text, "", "deleting a guess clears the public draft");
 });
 
+test("final edits and erasure flush promptly instead of waiting past the answer deadline", (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"] });
+  const sent: AnswerDraftMessage[] = [];
+  const sender = new AnswerDraftSender((message) => {
+    sent.push(message);
+    return true;
+  });
+  sender.update(draft("blu"), 100);
+  t.mock.timers.tick(50);
+  sender.update(draft("blue"), 100);
+  t.mock.timers.tick(49);
+  assert.equal(sent.length, 1);
+  t.mock.timers.tick(1);
+  assert.equal(sent.at(-1)?.text, "blue");
+  sender.update(draft(""), 100);
+  assert.equal(sent.at(-1)?.text, "", "deletion near the deadline is sent immediately");
+  sender.cancel();
+  t.mock.timers.tick(500);
+  assert.equal(sent.length, 3);
+});
+
 test("submission, disconnect or pause can cancel a queued draft without sending it", (t) => {
   t.mock.timers.enable({ apis: ["Date", "setTimeout"] });
   const sent: AnswerDraftMessage[] = [];

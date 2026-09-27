@@ -4,6 +4,7 @@ import {
   configSchema,
   DEFAULT_TEAM_NAMES,
   REACTION_COOLDOWN_MS,
+  type AnswerDraftMessage,
   type AttemptView,
   type ChatMessage,
   type Format,
@@ -739,7 +740,19 @@ export function nextDeadline(state: Session): number | null {
   return Math.ceil(Math.min(...deadlines));
 }
 
-export function tick(previous: Session, now: number): Session {
+function answerWindowId(state: Session): string | null {
+  const q = state.question;
+  return state.phase === "answering" && q?.answerer && state.block
+    ? `${state.id}:block:${state.blockNumber}:question:${state.block.index}:answer:${q.attempts.length}:${q.answerer}`
+    : null;
+}
+
+/** The coordinator supplies only the current connection's last accepted draft. */
+export function tick(
+  previous: Session,
+  now: number,
+  draft?: Pick<AnswerDraftMessage, "answerWindowId" | "text"> | null,
+): Session {
   const first = nextDeadline(previous);
   if (first === null || first > now) return previous;
   const state = clone(previous);
@@ -759,8 +772,19 @@ export function tick(previous: Session, now: number): Session {
         if (state.block!.bundle.format === "assigned") startAssignedAnswer(state, deadline);
         else q.graceAt = deadline + state.config.graceMs;
       } else exhaustedQuestion(state, deadline);
-    } else if (state.phase === "answering") submit(state, "", deadline, true);
-    else if (state.phase === "reveal") advance(state, deadline);
+    } else if (state.phase === "answering") {
+      const player = state.players.find((value) => value.id === q.answerer);
+      const text =
+        draft?.answerWindowId === answerWindowId(state) &&
+        player?.connected &&
+        player.role === "player" &&
+        !state.removedIds.includes(player.id)
+          ? draft.text.trim().slice(0, 500)
+          : "";
+      draft = null; // Never reuse it for a clarification or a later answer window.
+      if (text) state.lastActivity = deadline;
+      submit(state, text, deadline, !text);
+    } else if (state.phase === "reveal") advance(state, deadline);
     else break;
   }
   return bump(state);
@@ -1136,10 +1160,7 @@ export function publicView(state: Session, selfId: string, now: number): Session
           : q.graceAt
       : null,
     answererId: q?.answerer ?? null,
-    answerWindowId:
-      state.phase === "answering" && q?.answerer && b
-        ? `${state.id}:block:${state.blockNumber}:question:${b.index}:answer:${q.attempts.length}:${q.answerer}`
-        : null,
+    answerWindowId: answerWindowId(state),
     answerDraft: "",
     eligibleIds,
     canBuzz: !!self?.connected && eligibleIds.includes(selfId),

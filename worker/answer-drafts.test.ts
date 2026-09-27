@@ -126,6 +126,48 @@ test("the actual deadline rejects late text without advancing or judging the gam
   assert.ok(accept(new AnswerDrafts(), "just in time", view(), 8999));
 });
 
+test("deadline submission consumes the last valid edit once, even after a late frame or projection", () => {
+  const drafts = new AnswerDrafts();
+  accept(drafts, "gravity");
+  assert.equal(drafts.takeExpired(view(), sender.connectionId, 8999), null);
+  assert.equal(
+    drafts.accept(frame("late overwrite"), view(), sender, sender.connectionId, 9000),
+    null,
+  );
+  assert.equal(drafts.text(view(), sender.connectionId, 9001), "");
+  assert.deepEqual(drafts.takeExpired(view(), sender.connectionId, 9002), frame("gravity"));
+  assert.equal(drafts.takeExpired(view(), sender.connectionId, 9003), null);
+});
+
+test("deadline submission respects deletion, pause, clarification and connection ownership", () => {
+  const drafts = new AnswerDrafts();
+  accept(drafts, "gravity");
+  accept(drafts, "");
+  assert.equal(drafts.takeExpired(view(), sender.connectionId, 9000)?.text, "");
+  accept(drafts, "held");
+  assert.equal(
+    drafts.takeExpired({ ...view(), pausedReasons: ["Paused"] }, sender.connectionId, 20_000),
+    null,
+  );
+  assert.equal(
+    drafts.takeExpired({ ...view(), deadline: 25_000 }, sender.connectionId, 25_000)?.text,
+    "held",
+  );
+  for (const [state, connection] of [
+    [{ ...view(), answerWindowId: "clarification-window" }, sender.connectionId],
+    [view(), "replacement-tab"],
+    [view(), undefined],
+  ] as const) {
+    accept(drafts, "must not submit");
+    assert.equal(drafts.takeExpired(state, connection, 9000), null);
+  }
+  assert.equal(
+    new AnswerDrafts().takeExpired(view(), sender.connectionId, 9000),
+    null,
+    "restart cannot recover a draft",
+  );
+});
+
 test("question, attempt, phase and seat changes permanently discard previous drafts", () => {
   const alterations: Array<(state: DraftView) => void> = [
     (state) => {

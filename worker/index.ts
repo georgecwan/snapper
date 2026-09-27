@@ -13,6 +13,7 @@ import {
 } from "./security";
 import { beginGitHubSignIn, completeGitHubSignIn } from "./oauth";
 import { privateAssetPath } from "./question-packs";
+import { withShareMetadata } from "./share-metadata";
 export { Lobby } from "./lobby";
 
 export interface Env extends AuthEnv {
@@ -59,7 +60,7 @@ export default {
         url.search = "";
         return env.ASSETS.fetch(new Request(url, request));
       }
-      return env.ASSETS.fetch(request);
+      return withShareMetadata(request, await env.ASSETS.fetch(request));
     }
     const path = url.pathname.slice("/api/snapper".length);
     const dev = localDev(request, env);

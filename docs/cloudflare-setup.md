@@ -2,8 +2,12 @@
 
 Snapper uses one Cloudflare Worker for the website/API and one SQLite Durable
 Object for the live lobby and saved settings. No separate database subscription,
-Vercel project, paid domain or player accounts are needed. Deployment has not yet
-been performed; the local implementation and emulator are ready.
+Vercel project, paid domain or player accounts are needed. The existing deployment
+is [Snapper](https://snapper.gw9999-cloudflare.workers.dev). On 2026-09-26, the
+dashboard confirmed Workers Free ($0), GitHub builds from `main`, and the live
+status endpoint confirmed configured owner sign-in with development auth disabled.
+Preserve its existing runtime variables and secrets. The setup steps below are
+for reference or a fresh account, not prerequisites to update this deployment.
 
 **Recommended: connect GitHub in Cloudflare's dashboard.** Workers Builds can
 build and deploy `main` automatically, with no local Cloudflare login or terminal
@@ -85,9 +89,10 @@ owner sign-in is configured; that is expected. Subsequent pushes to `main` deplo
 automatically once this connection is active.
 [Build configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/).
 
-For share-image metadata, add `VITE_PUBLIC_HOSTNAME` with the game's hostname
-(without `https://`) under **Settings → Builds → Build variables and secrets**.
-This is a public build setting; it is not needed for owner authentication.
+Share previews need no additional setting. The Worker supplies absolute image
+URLs from the requested game address, including on custom domains and before
+owner sign-in is configured. The older `VITE_PUBLIC_HOSTNAME` requirement is
+superseded; it remains optional for the legacy template build.
 
 ## 3. Register owner sign-in
 
@@ -138,15 +143,15 @@ Open the deployed address, sign in with the allowed GitHub account, and open the
 lobby. Share the same link with friends and approve each join request. Select
 teams/settings, start playing, and optionally promote a player to moderator.
 
-Before the first full game, use a second browser/device to verify approval,
+For a full release acceptance check, use a second browser/device to verify approval,
 answering, scoring and reconnecting. Check that the session closes after its last
 player leaves, and that saved settings survive opening a new session. Review
-Workers and Durable Object usage in Cloudflare after that first game. These live
-checks remain outstanding until deployment; emulator success is not a claim that
-real OAuth, cross-country latency or provider quotas have been verified.
+Workers and Durable Object usage in Cloudflare after a game. Local emulator
+success is not a claim that real OAuth, cross-country latency or provider quotas
+have been fully verified. Deployment checks must not alter an active live game.
 
 The Vercel integration is disabled in `vercel.json`. Cloudflare auto-deployment
-starts only after connecting this repository in the Cloudflare dashboard.
+is already connected to this repository in the Cloudflare dashboard.
 
 ## Optional: manual deployment from a development machine
 
@@ -168,7 +173,7 @@ Free account. Use the runtime values/secrets already stored in the dashboard,
 then deploy the default production environment:
 
 ```sh
-VITE_PUBLIC_HOSTNAME=snapper.YOUR-SUBDOMAIN.workers.dev npm run deploy
+npm run deploy
 ```
 
 Wrangler provisions the declared SQLite Durable Object. The game stays closed

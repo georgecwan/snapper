@@ -241,7 +241,7 @@ export interface SessionView {
   answererId: string | null;
   /** Identifies one answer attempt, including a separate clarification window. */
   answerWindowId: string | null;
-  /** Unsubmitted player text, relayed transiently by the coordinator. */
+  /** Live player text, submitted by the coordinator if still present at the deadline. */
   answerDraft: string;
   eligibleIds: string[];
   canBuzz: boolean;
@@ -306,6 +306,8 @@ export const commandSchema = z
     id: z.string().min(1).max(100),
     sessionId: z.string().min(1).max(100),
     questionId: z.string().max(100).nullable(),
+    // Required for answers at the Worker boundary; other actions have no answer window.
+    answerWindowId: z.string().min(1).max(250).nullable().optional(),
     action: actionSchema,
   })
   .strict();

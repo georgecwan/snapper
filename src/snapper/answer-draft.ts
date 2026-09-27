@@ -23,15 +23,19 @@ export class AnswerDraftSender {
     this.send = send;
   }
 
-  update(draft: AnswerDraftMessage): void {
+  update(draft: AnswerDraftMessage, sendBy = Infinity): void {
     if (
       this.last &&
       (this.last.sessionId !== draft.sessionId || this.last.answerWindowId !== draft.answerWindowId)
     )
       this.cancel();
     this.pending = draft;
-    if (this.timer !== null) return;
-    const wait = Math.max(0, this.lastSentAt + ANSWER_DRAFT_INTERVAL_MS - Date.now());
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    const wait = Math.max(
+      0,
+      Math.min(this.lastSentAt + ANSWER_DRAFT_INTERVAL_MS, sendBy) - Date.now(),
+    );
     if (wait === 0) this.flush();
     else this.timer = setTimeout(() => this.flush(), wait);
   }

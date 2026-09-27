@@ -167,12 +167,17 @@ tossup or standalone Snapper can be a one-question block.
 - Answers are typed and judged automatically, with accepted aliases and
   conservative typo tolerance. Do not use unrestricted substring matching.
 - While the current answerer types, all admitted players and spectators see
-  their unsubmitted answer text live. A draft is presentation only: it does not
-  submit an answer, create an attempt, change scores or enter chat/history.
+  their unsubmitted answer text live. Typing alone does not create an attempt,
+  change scores or enter chat/history. Pressing Enter submits early; at the
+  server's answer deadline, the latest nonblank accepted draft is automatically
+  submitted and judged normally, including during clarification. An empty or
+  whitespace-only field times out. This supersedes the earlier rule that
+  discarded all typed text on timeout. Do not extend deadlines to accept late text.
   Only the current answerer's active connection may update it, within the
   current answer window. Reject stale, expired and impersonated updates.
 - Drafts are transient and are never saved with session records or browser
-  preferences. Clear them on submission, timeout, clarification, answerer
+  preferences. Automatically submitted text becomes an ordinary session-only
+  answer attempt. Clear drafts on submission, empty timeout, clarification, answerer
   disconnection/removal, tab takeover and question end. A pause freezes the
   existing draft; editing resumes in the same answer window after the pause.
   A participant joining during an answer sees the latest valid draft.
@@ -294,6 +299,9 @@ odds.
 - Name: **Snapper**. Use a **bright game-show style**, bold colors, large scores
   and a prominent buzzer. The former Lectern green/brass paper-card style does
   not guide this redesign.
+- Shared links use a custom Snapper card in the same palette, with a buzzer
+  illustration and a plain trivia description. Previews are public and contain
+  no live session details, player information or question content.
 - Public text chat shared by admitted players and spectators. No private/team
   chat, in-app voice or video is part of the selected scope.
 - Optional, distinct sound effects for your confirmed buzz, another player's

@@ -376,7 +376,7 @@ export function Game({
                               ? " is typing…"
                               : "’s guess"}
                           </strong>
-                          <span>Not submitted</span>
+                          <span>Submits when time runs out</span>
                         </div>
                         <p className={state.answerDraft ? "" : "live-guess-empty"}>
                           {state.answerDraft || "No text yet"}
@@ -528,7 +528,9 @@ export function Game({
                   </div>
                 )}
                 {state.phase === "answering" && state.answererId === self?.id && (
-                  <p className="answer-visibility">The lobby can see what you type.</p>
+                  <p className="answer-visibility">
+                    The lobby can see what you type. Submits when time runs out.
+                  </p>
                 )}
                 {needsElaboration && state.answererId === self?.id && (
                   <p className="answer-prompt" role="status">
@@ -565,7 +567,10 @@ export function Game({
                     spellCheck={false}
                     enterKeyHint="send"
                     value={answer}
-                    onChange={(event) => setAnswer(event.target.value)}
+                    onChange={(event) => {
+                      setAnswer(event.target.value);
+                      if (canAnswer && !submitted) updateAnswerDraft(event.target.value);
+                    }}
                     disabled={!canAnswer || submitted}
                     maxLength={500}
                     placeholder={

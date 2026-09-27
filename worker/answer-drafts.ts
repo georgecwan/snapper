@@ -30,7 +30,7 @@ interface RateWindow {
   count: number;
 }
 
-/** Transient presentation state: never include this in a session record or socket attachment. */
+/** Transient text: retained for deadline submission, never saved in a session or attachment. */
 export class AnswerDrafts {
   private draft: Draft | null = null;
   private rates = new WeakMap<object, RateWindow>();
@@ -78,8 +78,8 @@ export class AnswerDrafts {
     );
   }
 
-  /** Reconcile on every full projection so a changed attempt/seat cannot retain old text. */
-  text(view: DraftView, currentConnectionId: string | undefined, now: number): string {
+  /** A changed attempt/seat must never retain text belonging to the previous one. */
+  private reconcile(view: DraftView, currentConnectionId: string | undefined): void {
     const draft = this.draft;
     if (
       draft &&
@@ -87,12 +87,36 @@ export class AnswerDrafts {
         draft.message.sessionId !== view.sessionId ||
         draft.message.questionId !== view.question?.id ||
         draft.message.answerWindowId !== view.answerWindowId ||
-        (!view.pausedReasons.length &&
-          !view.challenge &&
-          (view.deadline === null || now >= view.deadline)))
+        (!view.pausedReasons.length && !view.challenge && view.deadline === null))
     )
       this.draft = null;
+  }
+
+  text(view: DraftView, currentConnectionId: string | undefined, now: number): string {
+    this.reconcile(view, currentConnectionId);
+    // An unrelated broadcast or late frame must not discard the last valid text
+    // before the serialized deadline handler has had a chance to submit it.
+    if (!view.pausedReasons.length && !view.challenge && now >= (view.deadline ?? Infinity))
+      return "";
     return this.draft?.message.text ?? "";
+  }
+
+  takeExpired(
+    view: DraftView,
+    currentConnectionId: string | undefined,
+    now: number,
+  ): AnswerDraftMessage | null {
+    this.reconcile(view, currentConnectionId);
+    if (
+      view.pausedReasons.length ||
+      view.challenge ||
+      view.deadline === null ||
+      now < view.deadline
+    )
+      return null;
+    const message = this.draft?.message ?? null;
+    this.draft = null;
+    return message;
   }
 
   accept(

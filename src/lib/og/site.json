@@ -1,5 +1,8 @@
 {
   "title": "Snapper",
+  "description": "Live buzzer trivia with friends, in teams or free-for-all.",
+  "imageAlt": "Snapper. Trivia with friends. An orange game-show buzzer with a lightning bolt.",
+  "imageVersion": "2",
   "type": "x:game",
   "card": "custom"
 }

@@ -127,6 +127,82 @@ test("timeouts consume the attempt and late submissions cannot score", () => {
   assert.deepEqual(publicView(s, "a", 8000).eligibleIds, ["b"]);
 });
 
+test("the answer deadline judges the current draft just like an explicit submission", () => {
+  for (const [text, verdict, points] of [
+    ["  blue  ", "accept", 10],
+    ["green", "reject", 0],
+    ["   ", "reject", 0],
+    ["", "reject", 0],
+  ] as const) {
+    const state = act(start("snapper"), "a", { type: "buzz" }, 1);
+    const view = publicView(state, "a", 1);
+    const draft = { answerWindowId: view.answerWindowId!, text };
+    assert.equal(tick(state, view.deadline! - 1, draft), state, "never submit early");
+    const ended = tick(state, view.deadline!, draft);
+    const attempt = ended.question!.attempts[0];
+    assert.equal(attempt.answer, text.trim());
+    assert.equal(attempt.verdict, verdict);
+    assert.equal(attempt.points, points);
+    assert.equal(attempt.timeout, !text.trim());
+    assert.equal(attempt.at, view.deadline);
+    assert.equal(tick(ended, view.deadline!, draft).question!.attempts.length, 1);
+    assert.equal(state.question!.attempts.length, 0, "the original state remains immutable");
+  }
+});
+
+test("auto-submitted partials get one fresh clarification, never a reused draft", () => {
+  const state = act(
+    start("snapper", undefined, undefined, [
+      atom(0, {
+        answer: { canonical: "Alexander Hamilton", aliases: [], promptAliases: ["Hamilton"] },
+      }),
+    ]),
+    "a",
+    { type: "buzz" },
+    1,
+  );
+  const view = publicView(state, "a", 1);
+  const draft = { answerWindowId: view.answerWindowId!, text: "Hamilton" };
+  const prompted = tick(state, view.deadline!, draft);
+  const prompt = publicView(prompted, "a", view.deadline!);
+  assert.equal(prompt.attempts[0].verdict, "prompt");
+  assert.equal(prompt.attempts[0].points, 0);
+  assert.equal(prompt.deadline, view.deadline! + 8000);
+  assert.notEqual(prompt.answerWindowId, view.answerWindowId);
+  assert.equal(prompt.question!.answer, null);
+  const complete = tick(prompted, prompt.deadline!, {
+    answerWindowId: prompt.answerWindowId!,
+    text: "Alexander Hamilton",
+  });
+  assert.equal(complete.question!.attempts[1].verdict, "accept");
+  assert.equal(complete.players[0].score, 10);
+  const missed = tick(state, view.deadline! + 8000, draft);
+  assert.deepEqual(
+    missed.question!.attempts.map((attempt) => attempt.answer),
+    ["Hamilton", ""],
+  );
+});
+
+test("paused, replaced and disconnected answer windows cannot auto-submit stale text", () => {
+  const state = act(start("snapper"), "a", { type: "buzz" }, 1);
+  const view = publicView(state, "a", 1);
+  const draft = { answerWindowId: view.answerWindowId!, text: "blue" };
+  const paused = act(state, "a", { type: "pause" }, 1000);
+  assert.equal(tick(paused, 20_000, draft), paused);
+  const resumed = act(paused, "a", { type: "resume" }, 20_000);
+  const resumedDeadline = publicView(resumed, "a", 20_000).deadline!;
+  assert.equal(tick(resumed, resumedDeadline - 1, draft), resumed);
+  assert.equal(tick(resumed, resumedDeadline, draft).players[0].score, 10);
+  for (const candidate of [
+    tick(state, view.deadline!, { ...draft, answerWindowId: "previous-window" }),
+    tick(setConnected(state, "a", false, 1000), view.deadline!, draft),
+    tick(act(state, "a", { type: "answer", text: "green" }, 1000), view.deadline!, draft),
+  ]) {
+    assert.equal(candidate.players[0].score, 0);
+    assert.equal(candidate.question!.attempts.length, 1);
+  }
+});
+
 test("progressive content is a server projection; snapshots contain no future text or answer", () => {
   const secret = atom(0, {
     id: "SECRET-SOURCE-ID",

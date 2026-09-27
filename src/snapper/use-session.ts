@@ -290,9 +290,11 @@ export function useSession() {
         text: text.slice(0, 500),
       };
       if (!viewRef.current?.canAnswer || !matchesAnswerDraft(viewRef.current, draft)) return;
-      drafts.current?.update(draft);
+      // Stop coalescing near expiry so final edits/deletions leave the browser promptly.
+      const sendBy = (viewRef.current.deadline ?? Infinity) - clockOffset - 250;
+      drafts.current?.update(draft, sendBy);
     },
-    [renderedSessionId, renderedQuestionId, renderedAnswerWindowId],
+    [renderedSessionId, renderedQuestionId, renderedAnswerWindowId, clockOffset],
   );
   const send = useCallback(
     (action: GameAction) => {
@@ -312,12 +314,13 @@ export function useSession() {
         // Keep the question that the visible action referred to. A delayed
         // confirmation must not silently target an auto-advanced question.
         questionId: renderedQuestionId,
+        ...(action.type === "answer" ? { answerWindowId: renderedAnswerWindowId } : {}),
         action,
       };
       socket.current.send(JSON.stringify(command));
       return true;
     },
-    [renderedSessionId, renderedQuestionId],
+    [renderedSessionId, renderedQuestionId, renderedAnswerWindowId],
   );
 
   const retry = useCallback(async () => {
