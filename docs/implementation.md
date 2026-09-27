@@ -249,7 +249,12 @@ including a complete date component such as `1970` for `January 1, 1970`. Explic
 rejects take precedence; full aliases/typo acceptance stay unchanged. Correctly
 ordered incomplete sequences can prompt without partial credit. The existing
 single clarification gives a fresh fixed eight seconds; the UI explicitly asks
-for the full answer beside its refocused input. No hidden answer content is sent.
+for the full answer beside its refocused input. The clarification field starts
+with the same player's last submitted answer, with the caret at the end. It is
+published as a fresh draft for the new window, and subsequent edits (including
+clearing it) survive state updates. Other players and new questions start empty.
+This supersedes the earlier empty clarification field; unsubmitted text is still
+never restored across windows. No hidden answer content is sent.
 
 Adding content: author QuestionAtoms with stable text, accurate category and
 language, a reviewed canonical answer, useful explicit aliases, and provenance.
@@ -308,6 +313,18 @@ by the local emulator. Verify updates on the public origin after deployment,
 without changing an active game to run QA.
 
 ## Verification log
+
+Clarification input prefill, verified locally on 2026-09-26:
+
+- Browser checks confirmed Enter submits a partial answer, the prompted field
+  contains that submitted text with the caret at the end, and appending the
+  remaining answer then pressing Enter earns the expected score.
+- Automatic submission also opens a prefilled clarification; its new draft is
+  submitted normally at the clarification deadline. Deliberately clearing the
+  field survives pause/resume and yields an empty timeout rather than restoring
+  the prior answer. A new round starts with an empty answer field.
+- Frontend/Worker typechecking, scoped lint and the production build pass.
+  Desktop/mobile render checks cover development and built output.
 
 Automatic answer submission, verified locally on 2026-09-26:
 

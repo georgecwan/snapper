@@ -189,7 +189,12 @@ tossup or standalone Snapper can be a one-question block.
   Explicit rejections take precedence; accepted aliases still count as correct.
   Wrong extra words, negations, digit/word fragments and wrong sequence order do
   not qualify. A second incomplete response is incorrect. Show a clear prompt
-  beside the answer field and focus the new answer window.
+  beside the answer field and focus the new answer window. Prefill that field
+  with the same player's previous submitted answer and place the caret at its
+  end, so the player can expand it. This supersedes the empty clarification
+  input. Publish the prefilled value as the new window's live draft; Enter and
+  deadline submission behave normally. Preserve subsequent edits and deliberate
+  clearing, and never prefill another player's attempt or a new question.
 - Standard answer window: **8 seconds**. Sequence answer window: **20 seconds**.
   These values are configurable.
 - A wrong answer or timeout on ordinary buzzer questions locks that player out

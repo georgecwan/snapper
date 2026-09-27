@@ -64,6 +64,9 @@ verification plan.
   an ordinary answer (including clarification); an empty field times out.
   Pause freezes a draft; submission, clarification, departure, removal, tab
   takeover and question end clear it. Never persist unsubmitted draft text.
+  A clarification input starts with the same player's previous submitted answer,
+  ready to edit with the caret at the end. Publish it as a new draft for that
+  clarification window; subsequent edits or clearing must not be overwritten.
 - Seven text formats remain supported. Shootout is removed in both modes; keep
   its short questions available as ordinary Snappers and Assigned questions.
   Normalize legacy Shootout settings to Snapper once. Recover an active legacy

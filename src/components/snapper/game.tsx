@@ -54,6 +54,11 @@ export function Game({
 }) {
   const state = session.view!;
   const self = state.players.find((player) => player.id === state.selfId);
+  const lastAttempt = state.attempts.at(-1);
+  const needsElaboration =
+    state.phase === "answering" &&
+    lastAttempt?.verdict === "prompt" &&
+    lastAttempt.playerId === state.answererId;
   const [tab, setTab] = useState<"game" | "scores" | "chat">("game");
   const [localAnswer, setLocalAnswer] = useState<{ windowId: string | null; text: string }>({
     windowId: null,
@@ -62,8 +67,11 @@ export function Game({
   const inputWindowId = state.answerWindowId
     ? `${session.answerInputVersion}:${state.answerWindowId}`
     : null;
-  // A new attempt must never publish the previous attempt's text during an effect reset.
-  const answer = localAnswer.windowId === inputWindowId ? localAnswer.text : "";
+  // Seed only this player's clarification from the submitted answer. Once edited,
+  // even a deliberately empty field stays untouched by subsequent state updates.
+  const initialAnswer =
+    needsElaboration && state.answererId === state.selfId ? lastAttempt.answer : "";
+  const answer = localAnswer.windowId === inputWindowId ? localAnswer.text : initialAnswer;
   const setAnswer = useCallback(
     (text: string) => setLocalAnswer({ windowId: inputWindowId, text }),
     [inputWindowId],
@@ -83,11 +91,6 @@ export function Game({
     canAnswer = state.canAnswer && connected && !paused;
   const canChallenge = Boolean(question && connected && !state.challenge && state.attempts.length);
   const currentAnswerer = state.players.find((player) => player.id === state.answererId);
-  const lastAttempt = state.attempts.at(-1);
-  const needsElaboration =
-    state.phase === "answering" &&
-    lastAttempt?.verdict === "prompt" &&
-    lastAttempt.playerId === state.answererId;
   const seconds = state.deadline
     ? Math.max(0, (state.deadline - now - session.clockOffset) / 1000)
     : null;
@@ -113,9 +116,8 @@ export function Game({
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
-    setAnswer("");
     setSubmitted(false);
-  }, [question?.id, setAnswer]);
+  }, [question?.id, inputWindowId]);
   useEffect(() => {
     if (canAnswer && !submitted) updateAnswerDraft(answer);
     else cancelAnswerDraft();
@@ -126,7 +128,11 @@ export function Game({
   useEffect(() => {
     if (!canAnswer || submitted) return;
     setTab("game");
-    const frame = requestAnimationFrame(() => answerInput.current?.focus({ preventScroll: true }));
+    const frame = requestAnimationFrame(() => {
+      const input = answerInput.current;
+      input?.focus({ preventScroll: true });
+      input?.setSelectionRange(input.value.length, input.value.length);
+    });
     return () => cancelAnimationFrame(frame);
   }, [canAnswer, submitted, inputWindowId]);
   useEffect(() => {
