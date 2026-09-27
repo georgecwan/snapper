@@ -100,6 +100,17 @@ spending boundary.
 - Support **free-for-all** and **exactly two teams**.
 - Players choose their team, with up to eight players on each team. Include
   everyone in special formats; do not impose four active seats and substitutes.
+- The owner may also assign or reassign any approved player, including their own
+  player identity and away players, using **Move to [team]** in the participant
+  menu. Moderators cannot move other players. These controls appear in team mode
+  and do not turn spectators into players or claim a seat for someone who is away.
+  Moves apply immediately without an active block, at the next question for
+  ordinary play, or after the block for Assigned and scramble/bonuses. Show the
+  queued destination and offer **Keep [current team]** to cancel it. Players
+  retain their own team-choice controls. Honor queued reservations and recheck
+  capacity at the boundary; if the team fills before then, the move remains queued.
+  A removed participant's queued move is discarded. Moves remain session-only
+  and survive reconnects without altering answer windows, drafts or eligibility.
 - Points stay with the team that earned them if a player changes teams.
 - Approved spectators can take seats as soon as they open. Taking a seat does
   not bypass the next-question/fixed-block eligibility rule or the eight-player
@@ -139,7 +150,12 @@ tossup or standalone Snapper can be a one-question block.
   by matching question inventory**, at block boundaries. A format with more
   questions under the saved filters appears more often. Consecutive repeats are
   allowed; do not use a shuffled cycle. This supersedes uniform format choice.
-  Weight formats, not subject categories. Assigned uses the short-question pool;
+  Weight formats, not subject categories. **Assigned gets one quarter of the
+  regular selection weight** in both modes; this supersedes its previous full
+  inventory weight. With equal matching inventory, four regular blocks are
+  expected for each Assigned block; selection remains random, not a fixed cycle.
+  Keep complete Assigned rounds and equal primary opportunities within them.
+  Assigned uses the short-question pool;
   grouped formats count eligible question parts. Imported inventory comes from
   manifest counts rather than scanning every question or querying live services.
   These are matching inventory estimates, not exact remaining unseen counts;
@@ -223,8 +239,21 @@ The earliest submission now judged correct becomes the winner; later scoring
 for that question is undone. Recompute score and eligibility effects from the
 question's starting state.
 Once an answer is revealed, correction must not reopen it for more attempts.
-After the next question starts, the prior ruling is final: no late score
-adjustments or cascading rewinds.
+After the next question starts, the prior ruling is final: no late answer
+corrections or cascading rewinds. The owner's subsequently requested manual
+point adjustments are separate from answer rulings.
+
+Only the verified owner can add or deduct points from approved participants,
+including the owner's own score, away players and spectators. Use **Adjust
+points** in the participant menu, choose Add or Deduct, and enter a positive
+whole number (up to 10,000 per adjustment). Show the current and resulting totals;
+deductions may go below zero. In team mode, apply the same delta to their current
+team and preview both totals. That team keeps the adjustment if the participant
+later changes teams. With no current team, only the individual score changes.
+Manual adjustments do not alter answer history, clocks, roles or eligibility.
+They survive answer corrections and reconnects, but clear with a score reset,
+mode change or new session. This adds owner score control alongside existing
+moderator current-question corrections and reset-all controls.
 
 ## Seven text formats
 
@@ -378,6 +407,13 @@ badges and milestone awards were explicitly excluded; do not add them as part of
 - Participants choose their own emoji avatar from the provided set. Colours and
   default avatars follow player identity rather than scoreboard position. Avatar
   choices survive reconnects within the active session, not future game nights.
+- The owner alone may edit another approved player's or spectator's name and
+  emoji icon, including a disconnected participant who can still return to the
+  session. Moderators and guests cannot edit other identities. These changes are
+  session-only, survive reconnects, and update the visible name on current
+  attempts, chat and challenges without changing their content, scores or roles.
+  Participants may still choose their own icons. The picker offers 48 choices;
+  expanding it does not change existing default avatars.
 - The owner can name the two teams for the current session. Names are labels;
   stable A/B identities still control membership and previously earned points.
   Team names do not modify saved gameplay settings or grant extra permissions.

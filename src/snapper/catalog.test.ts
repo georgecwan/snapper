@@ -261,6 +261,93 @@ test("format chances follow a 9:1 matching inventory ratio and change with the f
   }
 });
 
+test("Assigned uses one-quarter of regular selection weight in both modes and source settings", async () => {
+  for (const mode of ["ffa", "teams"] as const) {
+    for (const source of ["bundled", "mixed"] as const) {
+      // Include pools not divisible by four and the full sixteen-player block.
+      for (const [inventory, roster] of [
+        [3, [players[0]!, players[8]!]],
+        [16, players],
+      ] as const) {
+        const totals = { tossup: 0, snapper: 0, assigned: 0 };
+        for (let ticket = 0; ticket < 90; ticket++) {
+          let draws = 0;
+          const selected = await selectBundle(
+            {
+              ...config,
+              mode,
+              source,
+              formats: ["tossup", "assigned", "snapper"],
+              categories: ["Science"],
+              difficulty: "hard",
+            },
+            [],
+            [...roster],
+            async () => {
+              throw new Error("Local content should satisfy this selection");
+            },
+            () => (draws++ === 0 ? (ticket + 0.5) / 90 : 0.75),
+            async (_format, _matching, _used, count) =>
+              Array.from({ length: count }, (_, i) => packedQuestion(i)),
+            async () => ({ tossup: inventory, snapper: inventory }),
+          );
+          const chosen = selected.bundle!;
+          assert.ok(chosen);
+          assert.equal(selected.message, undefined, "no provider fallback is needed");
+          assert.ok(chosen.format in totals);
+          totals[chosen.format as keyof typeof totals]++;
+          assert.equal(
+            chosen.atoms.length,
+            chosen.format === "assigned" ? roster.length : 1,
+            "frequency does not shorten Assigned blocks",
+          );
+          assert.equal(new Set(chosen.atoms.map((q) => q.id)).size, chosen.atoms.length);
+        }
+        assert.deepEqual(
+          totals,
+          { tossup: 40, snapper: 40, assigned: 10 },
+          `${mode}/${source}/${inventory}`,
+        );
+      }
+    }
+  }
+});
+
+test("Assigned's quarter weight also applies to authored content and unknown inventory fallbacks", async () => {
+  for (const unknownInventory of [false, true]) {
+    for (const formats of [
+      ["assigned", "snapper"],
+      ["snapper", "assigned"],
+    ] as const) {
+      let assigned = 0;
+      for (let ticket = 0; ticket < 100; ticket++) {
+        let draws = 0;
+        const selected = await selectBundle(
+          {
+            ...config,
+            mode: "ffa",
+            formats: [...formats],
+            categories: ["Science"],
+            difficulty: unknownInventory ? "hard" : "any",
+          },
+          [],
+          [players[0]!],
+          fetch,
+          () => (draws++ === 0 ? (ticket + 0.5) / 100 : 0.75),
+          unknownInventory ? async () => [packedQuestion(0)] : undefined,
+        );
+        assert.ok(selected.bundle);
+        if (selected.bundle.format === "assigned") assigned++;
+      }
+      assert.equal(
+        assigned,
+        20,
+        "one Assigned block per four Snappers, independent of option order",
+      );
+    }
+  }
+});
+
 test("disabled formats and legacy aliases cannot add duplicate format weight", async () => {
   const migrated = configSchema.parse({
     ...config,

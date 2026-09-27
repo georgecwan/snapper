@@ -73,7 +73,8 @@ verification plan.
   block as a final-current-question Snapper and release its unasked tail back to
   the pool. Preserve equal-opportunity Assigned rounds for unequal teams.
 - Select formats independently, weighted by matching question inventory under
-  the saved filters. Imported weights use manifest counts, not exhaustive reads
+  the saved filters. Assigned uses one quarter of the regular selection weight;
+  retain its complete, equal-opportunity blocks. Imported weights use manifest counts, not exhaustive reads
   or provider API calls; skip exhausted pools without repeating questions.
   Mixed sources randomly try local or live first with equal probability, then
   fall back. Do not permanently cache failed pack loads or silently widen filters.
@@ -114,6 +115,18 @@ verification plan.
   team names, and format/countdown cues. No streaks, session highlights or badges.
   Post-answer emoji reactions have been removed; retain avatars and scoring
   celebrations. Show question difficulty beside the category during reading.
+  Only the verified owner may edit other approved participants' names and icons.
+  Keep edits session-only and preserve identity, roles, scores, clocks and live
+  answer drafts; participants can still choose their own icons.
+  Only the verified owner may add or deduct a participant's points, including
+  their own. Apply the same delta to the participant's current team in team mode.
+  Manual points survive current-question corrections and reconnects, but remain
+  session-only and clear with score resets or a mode change. Preserve answer
+  history, clocks and eligibility.
+  The owner may reassign approved players to either team, respecting the
+  eight-player cap. Apply immediately in the lobby, at the next question for
+  ordinary play, or after the block for Assigned and scramble/bonuses. Show queued
+  moves, allow cancellation, and retain historical team points and live drafts.
   Effects cannot change clocks, scoring, eligibility or content visibility.
   Respect reduced motion.
 

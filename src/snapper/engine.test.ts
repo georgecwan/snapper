@@ -878,6 +878,95 @@ test("connected players and spectators change only their own avatar in every pha
   assert.ok(bad("watcher", { type: "avatar", avatar: "🦊" }));
 });
 
+test("only the connected owner can edit other approved participants", () => {
+  let s = initial([
+    person("a"),
+    person("b"),
+    person("mod", null, { moderator: true }),
+    person("watcher", null, { role: "spectator" }),
+  ]);
+  const edit = { type: "edit-participant", playerId: "b", name: "New name", avatar: "🐉" } as const;
+  for (const actor of ["b", "mod", "watcher", "unknown"])
+    assert.ok(transition(s, actor, edit, 0).error, `${actor} cannot edit another identity`);
+  for (const playerId of ["missing", "a"])
+    assert.ok(transition(s, "a", { ...edit, playerId }, 0).error);
+  for (const name of ["", " ", "x".repeat(33), "Bad\nName", "Bad\u007fName"])
+    assert.ok(transition(s, "a", { ...edit, name }, 0).error);
+  assert.ok(transition(s, "a", { ...edit, avatar: "<img>" } as unknown as GameAction, 0).error);
+  assert.ok(transition(s, "b", { ...edit, owner: true } as GameAction, 0).error);
+  s = setConnected(s, "b", false, 0);
+  s = act(s, "a", { ...edit, name: "  New name  " });
+  assert.equal(s.players.find((p) => p.id === "b")!.name, "New name");
+  assert.equal(s.players.find((p) => p.id === "b")!.avatar, "🐉");
+  s = setConnected(migrateSession(JSON.parse(JSON.stringify(s)), 0), "b", true, 0);
+  assert.equal(s.players.find((p) => p.id === "b")!.name, "New name", "reconnect keeps the edit");
+  s = act(s, "a", { ...edit, playerId: "watcher", name: "Spectator", avatar: "🍕" });
+  assert.equal(s.players.find((p) => p.id === "watcher")!.role, "spectator");
+  s = act(s, "a", { type: "spectate" });
+  s = act(s, "a", { ...edit, name: "From watching owner" });
+  s = act(s, "a", { type: "kick", playerId: "b" });
+  assert.ok(transition(s, "a", edit, 0).error, "removed identities cannot be edited");
+  s = setConnected(s, "a", false, 0);
+  assert.ok(transition(s, "a", { ...edit, playerId: "watcher" }, 0).error);
+});
+
+test("owner profile edits update session labels while preserving scores, clocks and answer identity", () => {
+  let s = start("snapper", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  s = act(s, "b", { type: "chat", text: "My message" });
+  s = act(s, "b", { type: "buzz" });
+  const beforeAnswer = publicView(s, "b", 0);
+  const edit = {
+    type: "edit-participant",
+    playerId: "b",
+    name: "Quiz Dragon",
+    avatar: "🐉",
+  } as const;
+  s = act(s, "a", edit);
+  const afterEdit = publicView(s, "b", 0);
+  assert.equal(afterEdit.answerWindowId, beforeAnswer.answerWindowId);
+  assert.equal(afterEdit.deadline, beforeAnswer.deadline);
+  assert.equal(afterEdit.canAnswer, true);
+  assert.equal(afterEdit.question!.answer, null);
+  s = act(s, "b", { type: "answer", text: "blue" });
+  s = act(s, "b", { type: "challenge" });
+  const before = structuredClone(s);
+  s = act(s, "a", { ...edit, name: "Renamed winner", avatar: "🦈" });
+  const view = publicView(s, "b", 0);
+  assert.equal(view.chat[0]!.name, "Renamed winner");
+  assert.equal(view.chat[0]!.text, "My message");
+  assert.equal(view.attempts[0]!.name, "Renamed winner");
+  assert.equal(view.attempts[0]!.answer, "blue");
+  assert.equal(view.challenge!.name, "Renamed winner");
+  assert.deepEqual(s.teamScores, before.teamScores);
+  assert.deepEqual(
+    s.players.map(({ id, score, team, role, owner, moderator }) => ({
+      id,
+      score,
+      team,
+      role,
+      owner,
+      moderator,
+    })),
+    before.players.map(({ id, score, team, role, owner, moderator }) => ({
+      id,
+      score,
+      team,
+      role,
+      owner,
+      moderator,
+    })),
+  );
+  assert.deepEqual(s.block, before.block);
+  assert.deepEqual(s.config, before.config);
+  assert.deepEqual(s.usedIds, before.usedIds);
+  assert.deepEqual(s.pauses, before.pauses);
+  assert.equal(s.lastActivity, before.lastActivity);
+  assert.equal(s.question!.revealAt, before.question!.revealAt);
+  const fresh = initial();
+  assert.equal(fresh.players[1]!.name, "B");
+  assert.equal(fresh.players[1]!.avatar, undefined, "edits do not survive a new session");
+});
+
 test("only the owner renames session team labels without changing settings or scores", () => {
   let s = start("snapper", [person("a", "A"), person("b", "B", { moderator: true })], {
     mode: "teams",
@@ -1048,4 +1137,273 @@ test("social projections are copied and cannot expose private answer material or
   const revealed = publicView(s, "a", 500);
   revealed.reactions[0]!.name = "Changed locally";
   assert.equal(s.reactions[0]!.name, "B");
+});
+
+test("score adjustments require a connected owner and a valid session target and delta", () => {
+  let s = initial([
+    person("a"),
+    person("b"),
+    person("mod", null, { moderator: true }),
+    person("watcher", null, { role: "spectator" }),
+  ]);
+  const adjustment = { type: "adjust-score", playerId: "b", delta: 15 } as const;
+  for (const actor of ["b", "mod", "watcher", "unknown"])
+    assert.ok(transition(s, actor, adjustment, 0).error);
+  for (const delta of [0, 1.5, -1.5, NaN, Infinity, -Infinity, 10001, -10001])
+    assert.ok(transition(s, "a", { ...adjustment, delta }, 0).error);
+  assert.ok(transition(s, "a", { ...adjustment, playerId: "missing" }, 0).error);
+  assert.ok(transition(s, "a", { ...adjustment, score: 500 } as GameAction, 0).error);
+  s = setConnected(s, "b", false, 0);
+  s = act(s, "a", adjustment);
+  assert.equal(
+    s.players.find((p) => p.id === "b")!.score,
+    15,
+    "away participants retain their totals",
+  );
+  s = act(s, "a", { ...adjustment, playerId: "a", delta: -5 });
+  s = act(s, "a", { type: "spectate" });
+  s = act(s, "a", { ...adjustment, playerId: "watcher", delta: -20 });
+  assert.equal(s.players.find((p) => p.id === "watcher")!.score, -20);
+  assert.equal(s.players[0]!.score, -5, "owner can also adjust their own score");
+  s = act(s, "a", { type: "kick", playerId: "b" });
+  assert.ok(transition(s, "a", adjustment, 0).error);
+  s = setConnected(s, "a", false, 0);
+  assert.ok(transition(s, "a", { ...adjustment, playerId: "watcher" }, 0).error);
+});
+
+test("manual points survive answers and corrections without changing question clocks or eligibility", () => {
+  let s = start("snapper");
+  s = act(s, "b", { type: "buzz" }, 100);
+  const before = publicView(s, "b", 100);
+  const activity = s.lastActivity;
+  s = act(s, "a", { type: "adjust-score", playerId: "b", delta: 25 }, 100);
+  const after = publicView(s, "b", 100);
+  for (const field of ["answererId", "answerWindowId", "deadline", "canAnswer", "phase"] as const)
+    assert.equal(after[field], before[field]);
+  assert.deepEqual(after.eligibleIds, before.eligibleIds);
+  assert.deepEqual(after.attempts, before.attempts);
+  assert.deepEqual(after.question, before.question);
+  assert.equal(s.lastActivity, activity);
+  assert.equal(after.players[1]!.score, 25);
+  s = answer(s, "b", "blue", 200);
+  assert.equal(s.players[1]!.score, 35);
+  const attemptId = s.question!.attempts[0]!.id;
+  s = act(s, "a", { type: "adjust-score", playerId: "b", delta: -40 }, 200);
+  assert.equal(s.players[1]!.score, -5);
+  s = act(s, "a", { type: "correct", attemptId, verdict: "reject" }, 200);
+  assert.equal(s.players[1]!.score, -15);
+  s = act(s, "a", { type: "correct", attemptId, verdict: "accept" }, 200);
+  assert.equal(s.players[1]!.score, -5);
+  assert.equal(s.question!.attempts[0]!.points, 10, "manual deltas do not rewrite answer points");
+  s = migrateSession(JSON.parse(JSON.stringify(s)), 200);
+  s = setConnected(setConnected(s, "b", false, 200), "b", true, 200);
+  assert.equal(s.players[1]!.score, -5, "recovery retains manual adjustments");
+  assert.equal(initial().players[1]!.score, 0, "a new session starts at zero");
+});
+
+test("team adjustments stay with the credited team when membership changes and answers are corrected", () => {
+  let s = start("snapper", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  s = answer(s, "a");
+  const attemptId = s.question!.attempts[0]!.id;
+  s = act(s, "a", { type: "adjust-score", playerId: "a", delta: 20 });
+  assert.deepEqual(s.teamScores, { A: 30, B: 0 });
+  s = act(s, "a", { type: "spectate" });
+  s = act(s, "a", { type: "take-seat", team: "B" });
+  s = act(s, "a", { type: "adjust-score", playerId: "a", delta: -5 });
+  assert.deepEqual(s.teamScores, { A: 30, B: -5 });
+  s = act(s, "a", { type: "correct", attemptId, verdict: "reject" });
+  assert.deepEqual(s.teamScores, { A: 20, B: -5 });
+  assert.equal(s.players[0]!.score, 15);
+  s = act(s, "a", { type: "correct", attemptId, verdict: "accept" });
+  assert.deepEqual(s.teamScores, { A: 30, B: -5 });
+  assert.equal(s.players[0]!.score, 25);
+});
+
+test("score resets and mode changes clear manual points without later correction resurrecting them", () => {
+  let s = start("snapper", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  s = answer(s, "a");
+  const attemptId = s.question!.attempts[0]!.id;
+  s = act(s, "a", { type: "adjust-score", playerId: "a", delta: 30 });
+  s = act(s, "a", { type: "reset-scores" });
+  s = act(s, "a", { type: "correct", attemptId, verdict: "reject" });
+  assert.equal(s.players[0]!.score, 0);
+  assert.deepEqual(s.teamScores, { A: 0, B: 0 });
+  s = act(s, "a", { type: "adjust-score", playerId: "a", delta: -15 });
+  s = act(s, "a", { type: "correct", attemptId, verdict: "accept" });
+  assert.equal(s.players[0]!.score, -15);
+  assert.equal(s.teamScores.A, -15);
+  s = configureSession(s, { ...s.config, mode: "ffa" }, 0);
+  s = next(s);
+  assert.equal(s.config.mode, "ffa");
+  assert.ok(s.players.every((p) => p.score === 0));
+  assert.deepEqual(s.teamScores, { A: 0, B: 0 });
+});
+
+test("manual points for late participants persist across scoring and the next question", () => {
+  let s = start("open");
+  s = addParticipant(s, person("late"), 0);
+  s = act(s, "a", { type: "pause" });
+  const holds = structuredClone(s.pauses);
+  s = act(s, "a", { type: "adjust-score", playerId: "late", delta: 50 });
+  assert.deepEqual(s.pauses, holds);
+  s = act(s, "a", { type: "resume" });
+  s = answer(s, "a");
+  assert.equal(s.players.find((p) => p.id === "late")!.score, 50);
+  s = next(s);
+  s = answer(s, "a");
+  assert.equal(s.players.find((p) => p.id === "late")!.score, 50);
+});
+
+test("only a connected owner can assign other approved players to teams", () => {
+  let s = initial(
+    [
+      person("a", "A"),
+      person("b", "B"),
+      person("mod", "A", { moderator: true }),
+      person("watcher", null, { role: "spectator" }),
+    ],
+    { mode: "teams" },
+  );
+  const move = { type: "assign-team", playerId: "b", team: "A" } as const;
+  for (const actor of ["b", "mod", "watcher", "unknown"])
+    assert.ok(transition(s, actor, move, 0).error);
+  for (const playerId of ["missing", "watcher"])
+    assert.ok(transition(s, "a", { ...move, playerId }, 0).error);
+  assert.ok(transition(s, "a", { ...move, team: "C" } as unknown as GameAction, 0).error);
+  assert.ok(transition(s, "a", { ...move, owner: true } as GameAction, 0).error);
+  assert.ok(transition(initial(), "a", move, 0).error, "FFA has no team assignments");
+  s = act(s, "a", { type: "spectate" });
+  s = setConnected(s, "b", false, 0);
+  s = act(s, "a", move);
+  assert.equal(s.players[1]!.team, "A");
+  assert.equal(s.players[1]!.connected, false, "assigning an away player does not take a seat");
+  s = setConnected(s, "b", true, 0);
+  assert.equal(s.players[1]!.team, "A", "reconnect keeps the assigned team");
+  s = act(s, "a", { type: "kick", playerId: "b" });
+  assert.ok(transition(s, "a", move, 0).error);
+  s = setConnected(s, "a", false, 0);
+  assert.ok(transition(s, "a", { ...move, playerId: "mod" }, 0).error);
+});
+
+test("owner team moves preserve an answer window and apply at the next ordinary question", () => {
+  let s = start("open", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  s = act(s, "b", { type: "buzz" }, 100);
+  const question = structuredClone(s.question);
+  const original = publicView(s, "b", 100);
+  s = act(s, "a", { type: "assign-team", playerId: "b", team: "A" }, 100);
+  assert.deepEqual(s.question, question);
+  assert.equal(s.players[1]!.team, "B");
+  const queued = publicView(s, "b", 100);
+  assert.deepEqual(queued.pendingTeams, { b: "A" });
+  assert.equal(queued.deadline, original.deadline);
+  assert.equal(queued.answerWindowId, original.answerWindowId);
+  assert.equal(queued.canAnswer, true);
+  assert.equal(queued.question!.answer, null);
+  s = answer(s, "b", "blue", 100);
+  const attemptId = s.question!.attempts[0]!.id;
+  s = act(s, "a", { type: "correct", attemptId, verdict: "reject" }, 100);
+  s = act(s, "a", { type: "correct", attemptId, verdict: "accept" }, 100);
+  s = next(s, 100);
+  assert.equal(s.players[1]!.team, "A");
+  assert.deepEqual(s.pendingTeams, {});
+  assert.equal(s.players[1]!.score, 10);
+  assert.deepEqual(s.teamScores, { A: 0, B: 10 }, "earned points remain with the previous team");
+});
+
+test("owner moves wait for frozen blocks and survive recovery without changing allocations", () => {
+  for (const format of ["assigned", "team"] as const) {
+    let s = start(format, [person("a", "A"), person("b", "B"), person("c", "B")], {
+      mode: "teams",
+    });
+    const block = structuredClone(s.block);
+    s = act(s, "a", { type: "assign-team", playerId: "b", team: "A" });
+    assert.deepEqual(s.block, block);
+    s = answer(s, "a");
+    s = next(s);
+    assert.equal(s.players[1]!.team, "B", format);
+    assert.equal(s.pendingTeams.b, "A");
+    s = migrateSession(JSON.parse(JSON.stringify(s)), 0);
+    s = setConnected(setConnected(s, "b", false, 0), "b", true, 0);
+    assert.equal(s.players[1]!.team, "B");
+    assert.equal(s.pendingTeams.b, "A");
+    s = act(s, "a", { type: "end-block" });
+    assert.equal(s.players[1]!.team, "A");
+    assert.deepEqual(s.pendingTeams, {});
+  }
+});
+
+test("owner team assignment respects capacity including queued moves and rechecks at the boundary", () => {
+  let s = start(
+    "open",
+    [
+      person("a", "A"),
+      ...Array.from({ length: 6 }, (_, i) => person(`a${i}`, "A")),
+      person("b", "B"),
+      person("c", "B"),
+    ],
+    { mode: "teams" },
+  );
+  const move = { type: "assign-team", playerId: "b", team: "A" } as const;
+  s = act(s, "a", move);
+  assert.ok(
+    transition(s, "a", { ...move, playerId: "c" }, 0).error,
+    "pending moves count toward the cap",
+  );
+  // An approved participant can occupy the final current seat before the move applies.
+  s = addParticipant(s, person("new", "A"), 0);
+  s = act(s, "a", { type: "skip" });
+  s = next(s);
+  assert.equal(s.players.find((p) => p.id === "b")!.team, "B");
+  assert.equal(s.pendingTeams.b, "A", "wait for room rather than overfill the team");
+  assert.equal(
+    s.players.filter((p) => p.connected && p.role === "player" && p.team === "A").length,
+    8,
+  );
+  s = act(s, "a", { type: "assign-team", playerId: "b", team: "B" });
+  assert.deepEqual(s.pendingTeams, {}, "the owner can cancel a pending move");
+  assert.ok(transition(s, "a", move, 0).error, "full teams reject new moves");
+});
+
+test("players retain team choice and queued moves clear when a participant is removed", () => {
+  let s = start("open", [person("a", "A"), person("b", "B")], { mode: "teams" });
+  s = act(s, "a", { type: "assign-team", playerId: "b", team: "A" });
+  s = act(s, "b", { type: "team", team: "B" });
+  assert.deepEqual(s.pendingTeams, {});
+  s = act(s, "a", { type: "assign-team", playerId: "b", team: "A" });
+  s = act(s, "a", { type: "kick", playerId: "b" });
+  assert.deepEqual(publicView(s, "a", 0).pendingTeams, {});
+  s = act(s, "a", { type: "end-block" });
+  assert.equal(s.players[1]!.team, "B");
+});
+
+test("a pending move cannot overfill a team when retried between blocks", () => {
+  let s = start(
+    "open",
+    [
+      person("a", "A"),
+      ...Array.from({ length: 6 }, (_, i) => person(`a${i}`, "A")),
+      person("b", "B"),
+      ...Array.from({ length: 6 }, (_, i) => person(`b${i}`, "B")),
+    ],
+    { mode: "teams" },
+  );
+  s = act(s, "a", { type: "assign-team", playerId: "a", team: "B" });
+  s = act(s, "a", { type: "assign-team", playerId: "b", team: "A" });
+  s = addParticipant(s, person("new-a", "A"), 0);
+  s = addParticipant(s, person("new-b", "B"), 0);
+  s = act(s, "a", { type: "end-block" });
+  assert.equal(s.block, null);
+  assert.deepEqual(s.pendingTeams, { a: "B", b: "A" });
+  for (const action of [
+    { type: "assign-team", playerId: "a", team: "B" },
+    { type: "team", team: "B" },
+  ] as const) {
+    const result = transition(s, "a", action, 0);
+    assert.match(result.error!, /full/);
+    assert.equal(
+      result.state.players.filter((p) => p.connected && p.role === "player" && p.team === "B")
+        .length,
+      8,
+    );
+  }
 });

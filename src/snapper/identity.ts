@@ -1,5 +1,6 @@
 import {
   AVATARS,
+  DEFAULT_AVATARS,
   DEFAULT_TEAM_NAMES,
   type Avatar,
   type PlayerView,
@@ -21,7 +22,7 @@ export function playerColor(id: string): number {
 export function playerAvatar(player: Pick<PlayerView, "id" | "avatar">): Avatar {
   return player.avatar && AVATARS.includes(player.avatar)
     ? player.avatar
-    : AVATARS[identityHash(player.id) % AVATARS.length]!;
+    : DEFAULT_AVATARS[identityHash(player.id) % DEFAULT_AVATARS.length]!;
 }
 
 export function teamName(state: { teamNames?: Partial<Record<Team, string>> }, team: Team): string {
@@ -53,4 +54,36 @@ export const AVATAR_LABELS: Record<Avatar, string> = {
   "🤖": "Robot",
   "🎲": "Dice",
   "🌈": "Rainbow",
+  "🦁": "Lion",
+  "🐯": "Tiger",
+  "🐻": "Bear",
+  "🐨": "Koala",
+  "🐷": "Pig",
+  "🐮": "Cow",
+  "🐵": "Monkey",
+  "🐰": "Rabbit",
+  "🐧": "Penguin",
+  "🐢": "Turtle",
+  "🦋": "Butterfly",
+  "🐝": "Bee",
+  "🦄": "Unicorn",
+  "🐉": "Dragon",
+  "🦈": "Shark",
+  "🐬": "Dolphin",
+  "🍕": "Pizza",
+  "🍩": "Doughnut",
+  "🍉": "Watermelon",
+  "🍓": "Strawberry",
+  "🍒": "Cherries",
+  "🍍": "Pineapple",
+  "🥑": "Avocado",
+  "🍪": "Cookie",
+  "☀️": "Sun",
+  "🌙": "Moon",
+  "⭐": "Star",
+  "🔥": "Fire",
+  "🎮": "Game controller",
+  "🎸": "Guitar",
+  "⚽": "Football",
+  "🏀": "Basketball",
 };

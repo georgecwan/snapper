@@ -121,8 +121,8 @@ export function ConfigPanel({ config, editable, onSave, pending }: Props) {
       <fieldset disabled={!editable}>
         <legend>The question mix</legend>
         <p className="field-hint">
-          Formats with more matching questions appear more often. Questions do not repeat within a
-          session.
+          Formats with more matching questions appear more often. Assigned rounds get ¼ of the usual
+          selection weight. Questions do not repeat within a session.
         </p>
         <div className="option-grid">
           {FORMATS.map((format) => (

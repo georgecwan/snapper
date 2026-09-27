@@ -621,6 +621,31 @@ test(
     await draftVisible("", "deleting all text clears the live draft");
     friend.draft("Paris? Still thinking");
     await draftVisible("Paris? Still thinking", "edits replace the draft");
+    const answerDeadline = friend.state.deadline;
+    await ack(owner, {
+      type: "edit-participant",
+      playerId: friend.state.selfId,
+      name: "Renamed friend",
+      avatar: "🐉",
+    });
+    await draftVisible("Paris? Still thinking", "owner identity edits preserve the live draft");
+    assert.equal(friend.state.answerWindowId, originalWindow);
+    assert.equal(friend.state.deadline, answerDeadline);
+    assert.equal(
+      friend.state.players.find((player) => player.id === friend.state.selfId).name,
+      "Renamed friend",
+    );
+    assertUnsubmitted();
+    const adjustedPlayer = friend.state.selfId;
+    await ack(owner, { type: "adjust-score", playerId: adjustedPlayer, delta: 7 });
+    scores[adjustedPlayer] += 7;
+    await draftVisible("Paris? Still thinking", "manual points preserve the live draft");
+    assert.equal(friend.state.answerWindowId, originalWindow);
+    assert.equal(friend.state.deadline, answerDeadline);
+    assertUnsubmitted();
+    await ack(owner, { type: "adjust-score", playerId: adjustedPlayer, delta: -7 });
+    scores[adjustedPlayer] -= 7;
+    assertUnsubmitted();
 
     await late.connect();
     lateConnected = true;
@@ -1130,7 +1155,31 @@ test(
     await ack(spectator, { type: "avatar", avatar: "🐸" });
     await ack(owner, { type: "avatar", avatar: "🌈" });
     const friendId = friend.state.selfId;
+    const scoreAdjustment = { type: "adjust-score", playerId: friendId, delta: 15 };
+    await rejected(friend, scoreAdjustment, /owner/);
+    await rejected(spectator, scoreAdjustment, /owner/);
+    const adjustmentCommand = owner.send(scoreAdjustment);
+    assert.equal((await owner.result(adjustmentCommand)).type, "ack");
+    owner.socket.send(JSON.stringify(adjustmentCommand));
+    await ack(owner, { ...scoreAdjustment, delta: -25 });
+    await eventually(
+      () =>
+        [owner, friend, spectator].every(
+          (client) => client.state.players.find((p) => p.id === friendId)?.score === -10,
+        ),
+      "manual additions and deductions broadcast once, despite duplicate delivery",
+    );
+    const editFriend = {
+      type: "edit-participant",
+      playerId: friendId,
+      name: "Quiz Dragon",
+      avatar: "🐉",
+    };
+    await rejected(friend, editFriend, /owner/);
+    await rejected(spectator, editFriend, /owner/);
     await ack(owner, { type: "promote", playerId: friendId, moderator: true });
+    await rejected(friend, editFriend, /owner/);
+    await rejected(friend, scoreAdjustment, /owner/);
     await rejected(friend, { type: "rename-team", team: "A", name: "Guest label" }, /owner/);
     await rejected(spectator, { type: "rename-team", team: "B", name: "Spectators" }, /owner/);
     await ack(owner, { type: "rename-team", team: "A", name: "  Blue Jays  " });
@@ -1142,6 +1191,26 @@ test(
     );
     assert.equal(owner.state.players.find((p) => p.id === friendId).avatar, "🦊");
     assert.equal(owner.state.players.find((p) => p.id === spectator.state.selfId).avatar, "🐸");
+    await ack(owner, editFriend);
+    await ack(owner, {
+      type: "edit-participant",
+      playerId: spectator.state.selfId,
+      name: "Pizza fan",
+      avatar: "🍕",
+    });
+    await eventually(
+      () =>
+        [owner, friend, spectator].every(
+          (client) =>
+            client.state.players.some(
+              (p) => p.id === friendId && p.name === "Quiz Dragon" && p.avatar === "🐉",
+            ) &&
+            client.state.players.some(
+              (p) => p.id === spectator.state.selfId && p.name === "Pizza fan" && p.avatar === "🍕",
+            ),
+        ),
+      "owner edits reach both players and spectators",
+    );
     assert.deepEqual((await owner.http("/status")).body.config, savedConfig);
     assert.equal(owner.state.pendingConfig, null);
     await rejected(friend, { type: "react", emoji: "😂" }, /revealed/);
@@ -1163,14 +1232,16 @@ test(
     friend.socket.send(JSON.stringify(sent));
     // A following command and snapshot establish that duplicate receipt delivery
     // did not append a second reaction.
-    await ack(friend, { type: "avatar", avatar: "🦊" });
+    await ack(friend, { type: "avatar", avatar: "🦈" });
     assert.equal(friend.state.reactions.filter((r) => r.playerId === friendId).length, 1);
     await rejected(friend, { type: "react", emoji: "👏" }, /two seconds/);
     await ack(spectator, { type: "react", emoji: "👏" });
     await eventually(() => owner.state.reactions.length === 2, "both roles' reactions are shared");
     assert.equal(owner.state.deadline, revealDeadline, "reactions do not extend reveal time");
     assert.deepEqual(owner.state.teamScores, { A: 0, B: 0 });
-    assert.ok(owner.state.players.every((player) => player.score === 0));
+    assert.ok(
+      owner.state.players.every((player) => player.score === (player.id === friendId ? -10 : 0)),
+    );
     assert.equal(owner.state.attempts.length, 0);
     const reactions = structuredClone(owner.state.reactions);
     assert.equal(friend.state.reactionReadyAt, reactions[0].at + 2000);
@@ -1183,7 +1254,9 @@ test(
       "new tab takes over",
     );
     assert.equal(replacement.state.selfId, friendId);
-    assert.equal(replacement.state.players.find((p) => p.id === friendId).avatar, "🦊");
+    assert.equal(replacement.state.players.find((p) => p.id === friendId).score, -10);
+    assert.equal(replacement.state.players.find((p) => p.id === friendId).avatar, "🦈");
+    assert.equal(replacement.state.players.find((p) => p.id === friendId).name, "Quiz Dragon");
     assert.deepEqual(replacement.state.teamNames, { A: "Blue Jays", B: "Red Foxes" });
     assert.deepEqual(replacement.state.reactions, reactions);
     assert.equal(replacement.state.reactionReadyAt, reactions[0].at + 2000);
@@ -1235,5 +1308,128 @@ test(
     assert.deepEqual(owner.state.config, savedConfig, "only global settings survived cleanup");
     owner.send({ type: "close-session" });
     await eventually(() => owner.messages.some((m) => m.type === "ended"), "close the new session");
+  },
+);
+
+test(
+  "owner team reassignment preserves live answers and applies at the next eligible boundary",
+  { skip: !origin, timeout: 30_000 },
+  async (t) => {
+    const clients = [];
+    const make = () => {
+      const client = new Client();
+      clients.push(client);
+      return client;
+    };
+    t.after(() => clients.forEach((client) => client.close()));
+    const owner = make();
+    const first = await owner.http("/status");
+    assert.equal(first.body.devAuth, true, "Only run against the isolated local environment");
+    assert.equal(first.body.active, false);
+    await owner.http("/dev-owner", {});
+    await owner.http("/open", { name: "Team owner" });
+    await owner.connect();
+    const ack = async (client, action) => {
+      const result = await client.result(client.send(action));
+      assert.equal(result.type, "ack", `${action.type}: ${result.message ?? ""}`);
+    };
+    const rejected = async (client, action) => {
+      const result = await client.result(client.send(action));
+      assert.equal(result.type, "error");
+      assert.match(result.message, /owner/);
+    };
+    await ack(owner, {
+      type: "configure",
+      config: {
+        ...owner.state.config,
+        mode: "teams",
+        formats: ["open"],
+        categories: ["Science"],
+        difficulty: "any",
+        source: "bundled",
+        shortProgressive: false,
+        autoAdvance: false,
+        answerMs: 30_000,
+        graceMs: 30_000,
+      },
+    });
+    const savedConfig = (await owner.http("/status")).body.config;
+    const friend = make();
+    const spectator = make();
+    for (const [client, name, role] of [
+      [friend, "Team friend", "player"],
+      [spectator, "Team spectator", "spectator"],
+    ]) {
+      await client.http("/request", { name, role });
+      const pending = await eventually(
+        () => owner.state.pendingAdmissions.find((request) => request.name === name),
+        `${name} pending`,
+      );
+      await ack(owner, { type: "approve", requestId: pending.id });
+      await client.connect();
+    }
+    const friendId = friend.state.selfId;
+    const move = { type: "assign-team", playerId: friendId, team: "A" };
+    await rejected(friend, move);
+    await rejected(spectator, move);
+    await ack(owner, { type: "promote", playerId: friendId, moderator: true });
+    await rejected(friend, move);
+    await ack(owner, { type: "assign-team", playerId: owner.state.selfId, team: "A" });
+    await ack(owner, { ...move, team: "B" });
+    await ack(owner, { type: "start" });
+    await eventually(() => friend.state.canBuzz, "assigned team member can buzz");
+    await ack(friend, { type: "buzz" });
+    friend.draft("Still thinking");
+    await eventually(
+      () =>
+        owner.state.answerDraft === "Still thinking" &&
+        spectator.state.answerDraft === "Still thinking",
+      "draft reaches observers",
+    );
+    const windowId = friend.state.answerWindowId;
+    const deadline = friend.state.deadline;
+    await ack(owner, move);
+    await eventually(
+      () =>
+        [owner, friend, spectator].every((client) => client.state.pendingTeams[friendId] === "A"),
+      "queued move reaches all participants",
+    );
+    assert.equal(friend.state.players.find((p) => p.id === friendId).team, "B");
+    assert.equal(friend.state.answerWindowId, windowId);
+    assert.equal(friend.state.deadline, deadline);
+    assert.equal(owner.state.answerDraft, "Still thinking");
+    assert.equal(friend.state.question.answer, null);
+    assert.equal(friend.state.canAnswer, true);
+    assert.equal(friend.state.attempts.length, 0);
+    await ack(owner, { ...move, team: "B" });
+    assert.equal(owner.state.pendingTeams[friendId], undefined, "owner can cancel the queued move");
+    await ack(owner, move);
+    const replacement = make();
+    replacement.cookies = new Map(friend.cookies);
+    await replacement.connect();
+    assert.equal(replacement.state.players.find((p) => p.id === friendId).team, "B");
+    assert.equal(
+      replacement.state.pendingTeams[friendId],
+      "A",
+      "a reconnect retains the queued move",
+    );
+    await ack(owner, { type: "skip" });
+    await ack(owner, { type: "next" });
+    await eventually(
+      () =>
+        [owner, replacement, spectator].every(
+          (client) => client.state.players.find((p) => p.id === friendId).team === "A",
+        ),
+      "move applies at the next question",
+    );
+    assert.equal(replacement.state.pendingTeams[friendId], undefined);
+    assert.ok(owner.state.players.every((p) => p.score === 0));
+    assert.deepEqual(owner.state.teamScores, { A: 0, B: 0 });
+    assert.deepEqual((await owner.http("/status")).body.config, savedConfig);
+    owner.send({ type: "close-session" });
+    await eventually(
+      () => spectator.messages.some((m) => m.type === "ended"),
+      "test session cleaned up",
+    );
   },
 );

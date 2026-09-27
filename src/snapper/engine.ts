@@ -813,6 +813,9 @@ export function transition(
     "reject",
     "close-session",
     "rename-team",
+    "edit-participant",
+    "adjust-score",
+    "assign-team",
   ];
   const moderatorActions = [
     "start",
@@ -836,9 +839,46 @@ export function transition(
     player = state.players.find((value) => value.id === actorId)!;
   const q = state.question;
   switch (action.type) {
+    case "adjust-score": {
+      const target = state.players.find((value) => value.id === action.playerId);
+      if (!target || state.removedIds.includes(target.id))
+        return error(current, "Choose an approved participant in this session.");
+      const team = state.config.mode === "teams" ? target.team : null;
+      const score = target.score + action.delta;
+      const baseline = (q?.baseScores[target.id] ?? target.score) + action.delta;
+      if (
+        !Number.isSafeInteger(score) ||
+        !Number.isSafeInteger(baseline) ||
+        (team &&
+          (!Number.isSafeInteger(state.teamScores[team] + action.delta) ||
+            (q && !Number.isSafeInteger(q.baseTeams[team] + action.delta))))
+      )
+        return error(current, "That adjustment would exceed the score limit.");
+      target.score = score;
+      // Corrections replay the current question from these baselines. Keep manual
+      // adjustments separate from answer points so replay cannot erase them.
+      if (q) q.baseScores[target.id] = baseline;
+      if (team) {
+        state.teamScores[team] += action.delta;
+        if (q) q.baseTeams[team] += action.delta;
+      }
+      break;
+    }
     case "avatar":
       player.avatar = action.avatar;
       break;
+    case "edit-participant": {
+      const target = state.players.find((value) => value.id === action.playerId);
+      if (!target || target.owner || state.removedIds.includes(target.id))
+        return error(current, "Choose another approved participant in this session.");
+      target.name = action.name;
+      target.avatar = action.avatar;
+      // All visible labels follow the same session identity; content and scoring stay intact.
+      for (const entry of [...state.chat, ...state.reactions, ...(q?.attempts ?? [])])
+        if (entry.playerId === target.id) entry.name = action.name;
+      if (state.challenge?.playerId === target.id) state.challenge.name = action.name;
+      break;
+    }
     case "rename-team":
       state.teamNames[action.team] = action.name;
       break;
@@ -899,22 +939,45 @@ export function transition(
       state.lastActivity = now;
       submit(state, action.text, now);
       break;
-    case "team": {
-      if (state.config.mode !== "teams" || player.role !== "player")
-        return error(current, "Take a team-mode player seat first.");
+    case "team":
+    case "assign-team": {
+      const target =
+        action.type === "team"
+          ? player
+          : state.players.find((value) => value.id === action.playerId);
       if (
+        state.config.mode !== "teams" ||
+        !target ||
+        target.role !== "player" ||
+        state.removedIds.includes(target.id)
+      )
+        return error(current, "Choose an approved player in team mode.");
+      // Selecting the current team cancels a queued move without needing a new seat.
+      if (target.team === action.team) {
+        delete state.pendingTeams[target.id];
+        state.notice = `${target.name} stays on ${state.teamNames[action.team]}.`;
+        break;
+      }
+      if (
+        (!state.block &&
+          active(state).filter((value) => value.id !== target.id && value.team === action.team)
+            .length >= 8) ||
         active(state).filter(
           (value) =>
-            value.id !== actorId && (state.pendingTeams[value.id] ?? value.team) === action.team,
+            value.id !== target.id && (state.pendingTeams[value.id] ?? value.team) === action.team,
         ).length >= 8
       )
         return error(current, "That team is full.");
       if (state.block) {
-        state.pendingTeams[actorId] = action.team;
+        state.pendingTeams[target.id] = action.team;
         state.notice = frozen(state.block.bundle.format)
-          ? "Team change queued for the next block."
-          : "Team change queued for the next question.";
-      } else player.team = action.team;
+          ? `${target.name} will move to ${state.teamNames[action.team]} after this round.`
+          : `${target.name} will move to ${state.teamNames[action.team]} at the next question.`;
+      } else {
+        target.team = action.team;
+        delete state.pendingTeams[target.id];
+        state.notice = `${target.name} moved to ${state.teamNames[action.team]}.`;
+      }
       break;
     }
     case "take-seat": {
@@ -972,6 +1035,7 @@ export function transition(
       target.connected = false;
       target.moderator = false;
       state.removedIds.push(target.id);
+      delete state.pendingTeams[target.id];
       refreshHolds(state, now);
       break;
     }
@@ -1112,6 +1176,7 @@ export function publicView(state: Session, selfId: string, now: number): Session
     })),
     teamScores: clone(state.teamScores),
     teamNames: clone(state.teamNames),
+    pendingTeams: clone(state.pendingTeams),
     reactions: clone(state.reactions),
     reactionReadyAt:
       state.reactionAt[selfId] === undefined ? 0 : state.reactionAt[selfId] + REACTION_COOLDOWN_MS,

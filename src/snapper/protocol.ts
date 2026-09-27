@@ -27,7 +27,8 @@ export const FORMAT_LABELS: Record<Format, string> = {
   clues: "Who / What am I?",
 };
 export type Team = "A" | "B";
-export const AVATARS = [
+/** Keep the original default pool stable when adding selectable icons. */
+export const DEFAULT_AVATARS = [
   "⚡",
   "🦊",
   "🐸",
@@ -44,6 +45,41 @@ export const AVATARS = [
   "🤖",
   "🎲",
   "🌈",
+] as const;
+export const AVATARS = [
+  ...DEFAULT_AVATARS,
+  "🦁",
+  "🐯",
+  "🐻",
+  "🐨",
+  "🐷",
+  "🐮",
+  "🐵",
+  "🐰",
+  "🐧",
+  "🐢",
+  "🦋",
+  "🐝",
+  "🦄",
+  "🐉",
+  "🦈",
+  "🐬",
+  "🍕",
+  "🍩",
+  "🍉",
+  "🍓",
+  "🍒",
+  "🍍",
+  "🥑",
+  "🍪",
+  "☀️",
+  "🌙",
+  "⭐",
+  "🔥",
+  "🎮",
+  "🎸",
+  "⚽",
+  "🏀",
 ] as const;
 export type Avatar = (typeof AVATARS)[number];
 export const REACTIONS = ["😂", "👏", "😮", "💀"] as const;
@@ -223,6 +259,8 @@ export interface SessionView {
   players: PlayerView[];
   teamScores: Record<Team, number>;
   teamNames: Record<Team, string>;
+  /** Team moves queued until the next eligible question or block boundary. */
+  pendingTeams: Record<string, Team>;
   /** Bounded reactions to the currently revealed question. */
   reactions: ReactionView[];
   /** This participant's server-owned cooldown, including after reconnects. */
@@ -253,8 +291,46 @@ export interface SessionView {
   pendingAdmissions: PendingAdmission[];
   notice: string | null;
 }
+export const participantNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(32)
+  .refine((value) =>
+    [...value].every(
+      (character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127,
+    ),
+  );
+export const MAX_SCORE_ADJUSTMENT = 10_000;
 export const actionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("assign-team"),
+      playerId: z.string().min(1).max(100),
+      team: z.enum(["A", "B"]),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("adjust-score"),
+      playerId: z.string().min(1).max(100),
+      delta: z
+        .number()
+        .int()
+        .min(-MAX_SCORE_ADJUSTMENT)
+        .max(MAX_SCORE_ADJUSTMENT)
+        .refine((value) => value !== 0),
+    })
+    .strict(),
   z.object({ type: z.literal("avatar"), avatar: z.enum(AVATARS) }).strict(),
+  z
+    .object({
+      type: z.literal("edit-participant"),
+      playerId: z.string().min(1).max(100),
+      name: participantNameSchema,
+      avatar: z.enum(AVATARS),
+    })
+    .strict(),
   z.object({ type: z.literal("react"), emoji: z.enum(REACTIONS) }).strict(),
   z
     .object({

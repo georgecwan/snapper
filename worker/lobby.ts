@@ -775,9 +775,17 @@ export class Lobby extends DurableObject<Env> {
     if (!this.record) return "The session ended.";
     const action = command.action;
     if (
-      ["approve", "reject", "close-session", "configure", "promote", "rename-team"].includes(
-        action.type,
-      ) &&
+      [
+        "approve",
+        "reject",
+        "close-session",
+        "configure",
+        "promote",
+        "rename-team",
+        "edit-participant",
+        "adjust-score",
+        "assign-team",
+      ].includes(action.type) &&
       !actor.owner
     )
       return "Only the owner can do that.";

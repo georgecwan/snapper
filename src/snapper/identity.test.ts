@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AVATARS, type PlayerView } from "./protocol.ts";
-import { playerAvatar, playerColor, scoreLeaders, teamName } from "./identity.ts";
+import { AVATAR_LABELS, playerAvatar, playerColor, scoreLeaders, teamName } from "./identity.ts";
 
 const player = (id: string, changes: Partial<PlayerView> = {}): PlayerView => ({
   id,
@@ -28,8 +28,23 @@ test("player identity does not change when the scoreboard order or display name 
 });
 
 test("avatar choices override stable defaults without affecting the player's color", () => {
-  for (const avatar of AVATARS)
+  for (const avatar of AVATARS) {
     assert.equal(playerAvatar(player("one-player", { avatar })), avatar);
+    assert.ok(AVATAR_LABELS[avatar], "every icon has an accessible name");
+  }
+  assert.equal(new Set(AVATARS).size, AVATARS.length);
+});
+
+test("expanding the picker preserves the original default avatars", () => {
+  for (const [id, avatar] of [
+    ["stable-player", "👾"],
+    ["one-player", "🌈"],
+    ["player-0", "🦉"],
+    ["player-1", "🐸"],
+    ["player-42", "🦊"],
+    ["player-63", "⚡"],
+  ])
+    assert.equal(playerAvatar(player(id!)), avatar);
 });
 
 test("old snapshots fall back to familiar team names until this session supplies names", () => {

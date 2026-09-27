@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { configSchema, DEFAULT_CONFIG, type SiteStatus } from "../src/snapper/protocol";
+import {
+  configSchema,
+  DEFAULT_CONFIG,
+  participantNameSchema,
+  type SiteStatus,
+} from "../src/snapper/protocol";
 import {
   claims,
   configured,
@@ -21,17 +26,9 @@ export interface Env extends AuthEnv {
   ASSETS: Fetcher;
 }
 const guard = new RateGuard();
-const nameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(32)
-  .refine((v) =>
-    [...v].every((character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127),
-  );
-const openSchema = z.object({ name: nameSchema }).strict();
+const openSchema = z.object({ name: participantNameSchema }).strict();
 const requestSchema = z
-  .object({ name: nameSchema, role: z.enum(["player", "spectator"]) })
+  .object({ name: participantNameSchema, role: z.enum(["player", "spectator"]) })
   .strict();
 export function json(value: unknown, status = 200, headers?: HeadersInit): Response {
   return new Response(JSON.stringify(value), {

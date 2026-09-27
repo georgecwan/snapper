@@ -74,7 +74,15 @@ renders them, keeping authority checks current even when renders are batched.
   use each attempt's original scoring team, not its player's current membership.
   Reconnects do not replay the scoring celebration.
 - `src/components/snapper/community-extras.tsx` and its CSS contain animated score
-  values, the mobile score strip, avatar picker and owner team-name dialog.
+  values, the mobile score strip, avatar picker, owner participant editor,
+  point adjustment dialog and owner team-name dialog. **Adjust points** is
+  owner-only, includes the owner's own menu, and previews Add/Deduct changes
+  to the participant and their current team. **Move to [team]** lets the owner
+  reassign players in team mode; current and queued teams remain visible, with
+  **Keep [current team]** cancelling a pending move. The participant menu's **Edit name & icon** action is
+  owner-only and works for approved players and spectators. Both icon pickers
+  use the same 48 labeled choices in a scrollable grid. The original 16-icon
+  default pool stays fixed so existing default avatars do not change.
   `src/components/snapper/community.tsx` places these controls in the scoreboard
   and displays avatars in the roster and chat. `src/snapper/identity.ts` derives
   stable default avatars and colours from participant IDs, independently of rank.
@@ -89,7 +97,25 @@ renders them, keeping authority checks current even when renders are batched.
 
 Avatar, team-name and reaction changes use ordinary validated engine commands and
 authoritative snapshots. Connected approved players and spectators may choose
-only their own avatar. Only the verified owner may rename team labels; stable A/B
+their own avatar. The separate `edit-participant` command requires the verified
+owner at both the Worker and engine boundaries. It validates the target, name
+and icon, updates existing session display labels, and leaves identity, roles,
+scores, deadlines and live drafts intact. Edits survive session recovery but do
+not change a browser's saved nickname or carry into a new session.
+The separate `adjust-score` command requires the verified owner at both boundaries
+and a nonzero integer delta bounded to 10,000 points per command. It updates the
+individual/current-team totals and the current question's scoring baselines, so
+answer submission or correction cannot erase manual deltas. Existing command
+receipts prevent duplicate application. Attempts, live drafts, clocks, eligibility
+and saved settings are untouched; score resets and mode changes clear the deltas.
+The owner-only `assign-team` command is checked by both the Worker and engine,
+then shares the existing player `team` transition. It preserves player roles,
+historical score attribution and fixed-block rosters. Team capacity includes
+queued destinations and is rechecked when applying a move. Public `pendingTeams`
+metadata shows queued destinations without exposing question content. Selecting
+the current team cancels a queue, including via the player's own team controls;
+removal clears the queue. Spectators must first choose to take an available seat.
+Only the verified owner may rename team labels; stable A/B
 IDs still govern membership and historical scoring. Both choices last for the
 session, survive reconnects and never write the saved configuration.
 
@@ -217,8 +243,8 @@ taking an unshuffled prefix would favor early index entries. Index/shard reads
 and caches remain bounded.
 
 Format choices are independently weighted by matching question inventory:
-Tossup/Snapper use authored plus imported counts, Assigned uses the same short
-inventory when a full block is possible, and Open/team count distinct question
+Tossup/Snapper use authored plus imported counts, Assigned uses one quarter of
+the same short inventory weight when a full block is possible, and Open/team count distinct question
 parts of fully eligible groups. Sequence/clues use authored item counts.
 `QuestionPacks.counts` reads only the cached manifest and respects the saved
 language/category/difficulty filters. Imported counts describe matching inventory,
@@ -226,6 +252,11 @@ not exact unseen remainder or remote provider inventory. Authored counts exclude
 seen content. Exhausted choices fall through to another format; no-repeat and
 filter rules remain authoritative. Missing manifests retain safe fallback paths
 without adding provider requests or eagerly reading all shards.
+The Assigned reduction applies in FFA and team mode, including unknown-inventory
+fallbacks. Internally other weights are multiplied by four while Assigned keeps
+its raw weight, preserving exact integer tickets for small pools. Check full
+block availability before applying the frequency multiplier; round sizes and
+equal-opportunity rules remain unchanged.
 
 Mixed sourcing now randomly tries repository or live content first with equal
 probability for each supported block, falling back to the other if necessary.
@@ -277,6 +308,12 @@ need `orderedItems`; clues need four authored clues. Tossup `powerAt` is a
 ## Production deployment
 
 The existing game is [Snapper](https://snapper.gw9999-cloudflare.workers.dev).
+The 2026-09-26 owner-controls release includes participant name/icon editing,
+48 avatar choices, manual point adjustments, team reassignment and quarter-weight
+Assigned selection. Its pre-deployment gates passed: 198 unit tests, 8 multiplayer
+tests, build, typechecking, lint and matching dev/built desktop/mobile rendering.
+Deploy it through the existing `main` GitHub build connection; keep live checks
+read-only when the lobby is active.
 On 2026-09-26, the dashboard showed Workers Free ($0) as the current plan and
 successful automatic builds from `georgecwan/snapper` on `main`. Production
 reports `ownerConfigured: true` and `devAuth: false`. The local Wrangler OAuth
@@ -325,6 +362,64 @@ by the local emulator. Verify updates on the public origin after deployment,
 without changing an active game to run QA.
 
 ## Verification log
+
+Owner team reassignment, verified locally on 2026-09-26:
+
+- **198 unit tests** and **8 multiplayer integration tests** pass, plus build,
+  frontend/Worker typechecking and scoped lint. Coverage includes owner authority,
+  player/FFA validation, away-player recovery, active drafts and answer deadlines,
+  pending-move cancellation, frozen Assigned/bonus rosters, historical points,
+  removal cleanup and capacity checks both during and between blocks.
+- Desktop/mobile checks verify **Move to [team]**, immediate lobby assignment,
+  queued destination labels, **Keep [team]** cancellation and application at the
+  next question. The separate guest connection received each move. Test settings
+  were restored and the disposable session was closed.
+- Final dev/built desktop and mobile checks match with no overflow or console
+  errors. All screenshots were visually reviewed (`screenshots/snapper-team-*`).
+  These checks were completed before the combined owner-controls deployment.
+
+Reduced Assigned frequency, verified locally on 2026-09-26:
+
+- Assigned has one quarter of regular selection weight. Deterministic sampling
+  verifies the 4:1 ratio for equal inventories in FFA and team mode, both source
+  settings, small pools, authored content and unknown-inventory fallbacks.
+  Full Assigned blocks, filters and no-repeat behavior remain intact.
+- **192 unit tests**, **7 multiplayer integration tests**, build, frontend/Worker
+  typechecking and scoped lint pass. Desktop/mobile dev and built checks match,
+  with no console errors or overflow; all four screenshots were visually reviewed
+  (`screenshots/snapper-assigned-*`). The settings explanation reflects the new weight.
+- Verified before the combined deployment with owner profile/icon, point and
+  team controls.
+
+Owner point adjustments, verified locally on 2026-09-26:
+
+- **190 unit tests** and **7 multiplayer integration tests** pass, along with
+  build, frontend/Worker typechecking and scoped lint. Tests cover owner authority,
+  invalid targets/deltas, negative totals, team attribution, answer correction,
+  reset/mode-change cleanup, late arrivals, reconnects and duplicate receipts.
+  Manual adjustments preserve an active answer's draft, window and deadline.
+- Desktop/mobile browser checks verify additions, deductions below zero, score
+  previews, integer validation, the owner's own menu, Escape/focus return and
+  immediate guest updates. Team mode previews and applies both totals together.
+  Local settings were restored and the disposable test session was closed.
+- Dev and built desktop/mobile checks pass with matching verdicts, no overflow
+  and no console errors. All screenshots were reviewed (`screenshots/snapper-score-*`).
+  These checks preceded the combined owner-controls deployment.
+
+Owner participant editing and expanded icons, verified locally on 2026-09-26:
+
+- **185 unit tests** and **7 multiplayer integration tests** pass, along with
+  the production build, frontend/Worker typechecking and scoped lint. New checks
+  cover owner-only editing, rejected moderator/guest commands, invalid and removed
+  targets, current-session labels, recovery, stable default avatars and unchanged
+  scores, permissions, deadlines and active answer drafts.
+- Desktop/mobile browser checks verify **Edit name & icon**, all 48 icon choices,
+  immediate updates on the guest connection, blank-name validation, scrolling,
+  Escape cancellation and focus return. Choosing one's own new icon still works.
+  The test session was closed without changing saved gameplay settings.
+- Development and built desktop/mobile rendering checks pass with matching
+  verdicts, no overflow and no console errors. All viewport screenshots were
+  reviewed (`screenshots/snapper-profile-*`). This was local pre-deployment validation.
 
 Question difficulty and reaction removal, verified locally on 2026-09-26:
 

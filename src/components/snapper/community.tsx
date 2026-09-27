@@ -6,6 +6,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Pencil,
+  Calculator,
   Send,
   Trophy,
 } from "lucide-react";
@@ -13,7 +14,13 @@ import type { GameAction, PlayerView, SessionView, Team } from "@/snapper/protoc
 import { playerAvatar, playerColor, teamName } from "@/snapper/identity";
 import type { Confirm } from "./game";
 import { Menu } from "./menu";
-import { AnimatedScore, AvatarPicker, TeamNameEditor } from "./community-extras";
+import {
+  AnimatedScore,
+  AvatarPicker,
+  ParticipantEditor,
+  ScoreEditor,
+  TeamNameEditor,
+} from "./community-extras";
 
 type SendAction = (action: GameAction) => boolean;
 
@@ -68,21 +75,102 @@ function ParticipantMenu({
   self,
   send,
   confirm,
+  connected,
+  onEdit,
+  onAdjust,
 }: {
   player: PlayerView;
   state: SessionView;
   self?: PlayerView;
   send: SendAction;
   confirm: Confirm;
+  connected: boolean;
+  onEdit: (player: PlayerView, trigger: HTMLElement) => void;
+  onAdjust: (player: PlayerView, trigger: HTMLElement) => void;
 }) {
-  if (!state.canModerate || player.id === self?.id || player.owner || player.removed) return null;
+  if (!state.canModerate || player.removed) return null;
+  const canManage = player.id !== self?.id && !player.owner;
+  if (!canManage && !self?.owner) return null;
+  const pendingTeams = state.pendingTeams ?? {};
+  const plannedTeam = pendingTeams[player.id] ?? player.team;
   return (
     <Menu
       className="player-menu"
       label={`Manage ${player.name}`}
       trigger={<MoreHorizontal size={18} />}
     >
-      {self?.owner && player.role === "player" && player.connected && (
+      {self?.owner && canManage && (
+        <button
+          disabled={!connected}
+          onClick={(event) => {
+            const trigger = event.currentTarget.closest("details")?.querySelector("summary");
+            if (trigger) onEdit(player, trigger);
+          }}
+        >
+          <Pencil size={15} /> Edit name &amp; icon
+        </button>
+      )}
+      {self?.owner && (
+        <button
+          disabled={!connected}
+          onClick={(event) => {
+            const trigger = event.currentTarget.closest("details")?.querySelector("summary");
+            if (trigger) onAdjust(player, trigger);
+          }}
+        >
+          <Calculator size={15} /> Adjust points
+        </button>
+      )}
+      {self?.owner && state.config.mode === "teams" && player.role === "player" && (
+        <>
+          <p className="team-move-note">
+            {!state.block
+              ? "Assign team"
+              : ["assigned", "team"].includes(state.block.format)
+                ? "Move after this round"
+                : "Move at the next question"}
+          </p>
+          {(["A", "B"] as const).map((team) => {
+            const full =
+              player.team !== team &&
+              ((!state.block &&
+                state.players.filter(
+                  (other) =>
+                    other.id !== player.id &&
+                    other.connected &&
+                    other.role === "player" &&
+                    other.team === team,
+                ).length >= 8) ||
+                state.players.filter(
+                  (other) =>
+                    other.id !== player.id &&
+                    other.connected &&
+                    other.role === "player" &&
+                    (pendingTeams[other.id] ?? other.team) === team,
+                ).length >= 8);
+            const cancel = player.team === team && Boolean(pendingTeams[player.id]);
+            const label = `${cancel ? "Keep" : "Move to"} ${teamName(state, team)}`;
+            return (
+              <button
+                key={team}
+                disabled={!connected || plannedTeam === team || full}
+                aria-label={`${label} (team ${team})${full ? " — full" : ""}`}
+                onClick={() => send({ type: "assign-team", playerId: player.id, team })}
+              >
+                <span className="team-letter" aria-hidden="true">
+                  {team}
+                </span>
+                <span>
+                  {label}
+                  {full && " · Full"}
+                </span>
+                {plannedTeam === team && <Check size={13} aria-hidden="true" />}
+              </button>
+            );
+          })}
+        </>
+      )}
+      {self?.owner && canManage && player.role === "player" && player.connected && (
         <button
           onClick={() =>
             send({ type: "promote", playerId: player.id, moderator: !player.moderator })
@@ -91,18 +179,20 @@ function ParticipantMenu({
           {player.moderator ? "Remove moderator" : "Make moderator"}
         </button>
       )}
-      <button
-        onClick={() =>
-          confirm(
-            `Remove ${player.name}?`,
-            `${player.name} will leave this session and lose access to it. Their existing score and answers stay in the game history.`,
-            () => send({ type: "kick", playerId: player.id }),
-            "Remove",
-          )
-        }
-      >
-        Remove from session
-      </button>
+      {canManage && (
+        <button
+          onClick={() =>
+            confirm(
+              `Remove ${player.name}?`,
+              `${player.name} will leave this session and lose access to it. Their existing score and answers stay in the game history.`,
+              () => send({ type: "kick", playerId: player.id }),
+              "Remove",
+            )
+          }
+        >
+          Remove from session
+        </button>
+      )}
     </Menu>
   );
 }
@@ -122,6 +212,24 @@ export function Scoreboard({
 }) {
   const [avatarTrigger, setAvatarTrigger] = useState<HTMLElement | null>(null);
   const [teamEditor, setTeamEditor] = useState<{ team: Team; trigger: HTMLElement } | null>(null);
+  const [participantEditor, setParticipantEditor] = useState<{
+    playerId: string;
+    trigger: HTMLElement;
+  } | null>(null);
+  const [scoreEditor, setScoreEditor] = useState<{ playerId: string; trigger: HTMLElement } | null>(
+    null,
+  );
+  const adjustingPlayer = state.players.find(
+    (player) => player.id === scoreEditor?.playerId && !player.removed,
+  );
+  const adjustScore = (player: PlayerView, trigger: HTMLElement) =>
+    setScoreEditor({ playerId: player.id, trigger });
+  const editingPlayer = state.players.find(
+    (player) => player.id === participantEditor?.playerId && !player.removed && !player.owner,
+  );
+  const editParticipant = (player: PlayerView, trigger: HTMLElement) =>
+    setParticipantEditor({ playerId: player.id, trigger });
+  const pendingTeams = state.pendingTeams ?? {};
   const sorted = [...state.players]
     .filter((player) => player.role === "player" || player.score !== 0)
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
@@ -222,6 +330,9 @@ export function Scoreboard({
                         : "",
                   player.owner ? "Owner" : player.moderator ? "Moderator" : "",
                   player.team ? teamName(state, player.team) : "",
+                  state.config.mode === "teams" && pendingTeams[player.id]
+                    ? `Queued: ${teamName(state, pendingTeams[player.id]!)}`
+                    : "",
                   player.connected &&
                   !player.owner &&
                   !player.moderator &&
@@ -245,6 +356,9 @@ export function Scoreboard({
               self={self}
               send={send}
               confirm={confirm}
+              connected={connected}
+              onEdit={editParticipant}
+              onAdjust={adjustScore}
             />
           </li>
         ))}
@@ -276,16 +390,28 @@ export function Scoreboard({
               {(["A", "B"] as const).map((team) => (
                 <button
                   key={team}
-                  className={self.team === team ? "selected" : ""}
-                  aria-pressed={self.team === team}
+                  className={(pendingTeams[self.id] ?? self.team) === team ? "selected" : ""}
+                  aria-pressed={(pendingTeams[self.id] ?? self.team) === team}
                   aria-label={`Choose ${teamName(state, team)} (team ${team})`}
                   disabled={
                     !connected ||
-                    self.team === team ||
-                    state.players.filter(
-                      (player) =>
-                        player.connected && player.role === "player" && player.team === team,
-                    ).length >= 8
+                    (pendingTeams[self.id] ?? self.team) === team ||
+                    (self.team !== team &&
+                      ((!state.block &&
+                        state.players.filter(
+                          (player) =>
+                            player.id !== self.id &&
+                            player.connected &&
+                            player.role === "player" &&
+                            player.team === team,
+                        ).length >= 8) ||
+                        state.players.filter(
+                          (player) =>
+                            player.id !== self.id &&
+                            player.connected &&
+                            player.role === "player" &&
+                            (pendingTeams[player.id] ?? player.team) === team,
+                        ).length >= 8))
                   }
                   onClick={() => send({ type: "team", team })}
                 >
@@ -293,7 +419,7 @@ export function Scoreboard({
                   <span className="team-letter" aria-hidden="true">
                     {team}
                   </span>
-                  {self.team === team && <Check size={13} />}
+                  {(pendingTeams[self.id] ?? self.team) === team && <Check size={13} />}
                 </button>
               ))}
             </div>
@@ -356,6 +482,9 @@ export function Scoreboard({
               self={self}
               send={send}
               confirm={confirm}
+              connected={connected}
+              onEdit={editParticipant}
+              onAdjust={adjustScore}
             />
           </div>
         ))}
@@ -367,6 +496,27 @@ export function Scoreboard({
           connected={connected}
           onClose={() => setAvatarTrigger(null)}
           returnFocus={avatarTrigger}
+        />
+      )}
+      {participantEditor && editingPlayer && self?.owner && (
+        <ParticipantEditor
+          key={editingPlayer.id}
+          player={editingPlayer}
+          send={send}
+          connected={connected}
+          onClose={() => setParticipantEditor(null)}
+          returnFocus={participantEditor.trigger}
+        />
+      )}
+      {scoreEditor && adjustingPlayer && self?.owner && (
+        <ScoreEditor
+          key={adjustingPlayer.id}
+          player={adjustingPlayer}
+          state={state}
+          send={send}
+          connected={connected}
+          onClose={() => setScoreEditor(null)}
+          returnFocus={scoreEditor.trigger}
         />
       )}
       {teamEditor && self?.owner && (

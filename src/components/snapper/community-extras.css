@@ -48,15 +48,19 @@ button.identity-avatar:hover {
 }
 .avatar-picker {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  gap: 8px;
+  max-height: min(38dvh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3px;
 }
 .avatar-option {
   position: relative;
   display: grid;
   place-items: center;
   min-width: 44px;
-  min-height: 62px;
+  min-height: 54px;
   font-size: 30px;
   border: 2px solid #e6e8f0;
   border-radius: 12px;
@@ -113,6 +117,46 @@ button.identity-avatar:hover {
   gap: 10px;
   margin-top: 8px;
 }
+.participant-icon-label {
+  margin-top: 6px;
+  font-size: 13px;
+}
+.score-direction {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.score-direction button {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid #cbd0e0;
+  border-radius: 9px;
+  font-weight: 650;
+}
+.score-direction button[aria-pressed="true"] {
+  color: var(--blue);
+  border-color: var(--blue);
+  background: #edf0ff;
+}
+.score-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+  margin: 6px 0;
+  border-radius: 10px;
+  background: #f4f5fa;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.score-preview strong {
+  font-variant-numeric: tabular-nums;
+}
+.score-preview strong span {
+  color: var(--muted);
+  margin: 0 5px;
+}
 .team-scores .team-score {
   min-width: 0;
 }
@@ -160,6 +204,23 @@ button.identity-avatar:hover {
 }
 .team-choice {
   flex-wrap: wrap;
+}
+.player-menu .team-move-note {
+  border-top: 1px solid #e6e8f0;
+  margin: 5px 4px 0;
+  padding: 10px 5px 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.player-menu > div button:disabled {
+  opacity: 0.45;
+}
+.player-menu > div button > span:not(.team-letter) {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.player-name > span {
+  overflow-wrap: anywhere;
 }
 .seat-controls .team-choice > button {
   min-height: 44px;

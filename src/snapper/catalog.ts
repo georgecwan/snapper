@@ -414,9 +414,12 @@ export async function selectBundle(
         const unknownRepository = Boolean(repository && repositoryKind && imported === null);
         const count = inventory[format] + (repositoryKind ? (imported?.[repositoryKind] ?? 0) : 0);
         const enoughForBlock = count >= bundleSize(format, config, players);
+        const inventoryWeight = enoughForBlock ? count : livePossible || unknownRepository ? 1 : 0;
         return {
           format,
-          weight: enoughForBlock ? count : livePossible || unknownRepository ? 1 : 0,
+          // Assigned gets one quarter of the usual weight. Scale other formats
+          // by four so the integer ticket sampler stays exact even for tiny pools.
+          weight: inventoryWeight * (format === "assigned" ? 1 : 4),
         };
       }),
     random,

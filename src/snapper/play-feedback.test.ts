@@ -52,6 +52,7 @@ function state(changes: Partial<SessionView> = {}): SessionView {
     players: [player("a", 20), player("b", 10)],
     teamScores: { A: 0, B: 0 },
     teamNames: { ...DEFAULT_TEAM_NAMES },
+    pendingTeams: {},
     reactions: [],
     reactionReadyAt: 0,
     block: {
