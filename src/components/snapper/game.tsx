@@ -32,9 +32,16 @@ import type { SessionController } from "@/snapper/use-session";
 import { gameShortcut, moderationActions, reservesGameSpace } from "@/snapper/shortcuts";
 import { Chat, Scoreboard, SeatButtons } from "./community";
 import { MobileScoreStrip } from "./community-extras";
-import { FormatCue, Reactions, ScoringMoment } from "./play-effects";
+import { FormatCue, ScoringMoment } from "./play-effects";
 import { playerAvatar, teamName } from "@/snapper/identity";
 import { Menu } from "./menu";
+
+const DIFFICULTY_LABELS = {
+  easy: "Easy",
+  medium: "Medium",
+  hard: "Hard",
+  unrated: "Unrated",
+};
 
 export type Confirm = (
   title: string,
@@ -311,6 +318,12 @@ export function Game({
               </span>
               <div className="question-meta">
                 {question && <span>{question.category}</span>}
+                {question && (
+                  <span>
+                    <span className="sr-only">Difficulty: </span>
+                    {DIFFICULTY_LABELS[question.difficulty]}
+                  </span>
+                )}
                 {state.block && state.block.count > 1 && (
                   <span>
                     Part {state.block.index + 1} / {state.block.count}
@@ -485,12 +498,6 @@ export function Game({
               </span>
               <span>{eligibility}</span>
             </div>
-            <Reactions
-              state={state}
-              send={send}
-              connected={connected}
-              now={now + session.clockOffset}
-            />
             {question && state.attempts.length > 0 && (
               <div className={`question-actions${state.challenge ? " challenge-pending" : ""}`}>
                 <button

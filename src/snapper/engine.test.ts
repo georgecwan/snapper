@@ -208,11 +208,14 @@ test("progressive content is a server projection; snapshots contain no future te
     id: "SECRET-SOURCE-ID",
     text: "AAAA BBBB CCCC SECRET FUTURE WORDS",
     answer: { canonical: "SECRET ANSWER", aliases: ["SECRET ALIAS"] },
+    difficulty: "hard",
   });
   let s = start("tossup", undefined, { wpm: 120 }, [secret]);
   const before = JSON.stringify(s);
   const view = publicView(s, "a", 500);
   assert.equal(view.question!.text, "AAAA ");
+  assert.equal(view.question!.category, "Science");
+  assert.equal(view.question!.difficulty, "hard", "use the question rating, not the room filter");
   assert.equal(view.question!.answer, null);
   assert.equal(JSON.stringify(view).includes("SECRET"), false);
   assert.equal(JSON.stringify(s), before, "projections do not persist per character");

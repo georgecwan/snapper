@@ -83,83 +83,6 @@
 .play-confetti i:nth-child(3n + 1) {
   background: #526df7;
 }
-.play-reactions {
-  width: 100%;
-  min-width: 0;
-}
-.play-reactions-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.play-reactions-label {
-  font-size: 12px;
-  font-weight: 650;
-  color: #575e74;
-}
-.play-reaction-buttons {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(44px, 1fr));
-  gap: 7px;
-  flex: 1;
-}
-.play-reaction-buttons button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  min-height: 44px;
-  border: 1px solid #dbe0f1;
-  border-radius: 10px;
-  background: #f5f6fc;
-  transition:
-    transform 140ms ease,
-    background 140ms ease;
-}
-.play-reaction-buttons button > span {
-  font-size: 23px;
-  line-height: 1;
-}
-.play-reaction-buttons small {
-  font-size: 11px;
-  font-weight: 700;
-}
-.play-reaction-buttons button:enabled:hover {
-  background: #e8ecff;
-}
-.play-reaction-buttons button:enabled:active {
-  transform: scale(0.92);
-}
-.play-reaction-buttons button:disabled {
-  opacity: 0.55;
-}
-.play-recent-reactions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  max-height: 28px;
-  margin-top: 5px;
-  overflow: hidden;
-}
-.play-reaction-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: 40%;
-  padding: 3px 7px;
-  border-radius: 20px;
-  background: #eaf0ff;
-  color: #394675;
-  font-size: 10px;
-  animation: play-reaction-arrive 220ms ease-out;
-}
-.play-reaction-pill > span:nth-child(2) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .play-format-cue {
   display: flex;
   align-items: baseline;
@@ -197,16 +120,6 @@
     transform: translateY(-36px) rotate(200deg);
   }
 }
-@keyframes play-reaction-arrive {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 @keyframes play-cue-arrive {
   from {
     opacity: 0;
@@ -232,12 +145,6 @@
   .play-earned-points {
     font-size: 28px;
   }
-  .play-reactions-bar {
-    gap: 9px;
-  }
-  .play-reaction-buttons {
-    gap: 5px;
-  }
   .play-format-cue {
     padding: 8px 19px;
     gap: 3px 7px;
@@ -247,17 +154,10 @@
 @media (prefers-reduced-motion: reduce) {
   .play-scoring-pop,
   .play-confetti i,
-  .play-reaction-pill,
   .play-format-cue {
     animation: none;
   }
   .play-confetti {
     display: none;
-  }
-  .play-reaction-buttons button {
-    transition: none;
-  }
-  .play-reaction-buttons button:enabled:active {
-    transform: none;
   }
 }

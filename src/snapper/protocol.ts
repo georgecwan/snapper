@@ -197,6 +197,7 @@ export interface PublicQuestion {
   id: string;
   text: string;
   category: string;
+  difficulty: QuestionAtom["difficulty"];
   format: Format;
   readingComplete: boolean;
   answer: string | null;

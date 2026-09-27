@@ -67,7 +67,8 @@ renders them, keeping authority checks current even when renders are batched.
 ## Play feedback and participant identity
 
 - `src/components/snapper/play-effects.tsx` and its CSS render the current winner,
-  awarded points, brief celebration, reveal reactions and format reminder.
+  awarded points, brief celebration and format reminder. The post-answer reaction
+  controls, counts, recent-reaction list and their styles have been removed.
   `src/snapper/play-feedback.ts` derives feedback from the current public ruling
   and applied points, including corrections and score resets. Team lead changes
   use each attempt's original scoring team, not its player's current membership.
@@ -78,8 +79,11 @@ renders them, keeping authority checks current even when renders are batched.
   and displays avatars in the roster and chat. `src/snapper/identity.ts` derives
   stable default avatars and colours from participant IDs, independently of rank.
 - `src/components/snapper/game.tsx` places feedback next to the question and uses
-  the existing server deadline for the automatic next-question countdown. The
-  mobile strip shows your score and the leader in FFA, or both named team totals;
+  the existing server deadline for the automatic next-question countdown.
+  The question header displays its actual difficulty beside its category from the
+  start of reading through reveal, including Unrated. The server projects only
+  that current question's difficulty along with the existing public metadata.
+  The mobile strip shows your score and the leader in FFA, or both named team totals;
   spectators see the leaders. Format cues contain only public rules and points.
   Reduced motion is respected. Effects do not delay progression or add sounds.
 
@@ -89,7 +93,9 @@ only their own avatar. Only the verified owner may rename team labels; stable A/
 IDs still govern membership and historical scoring. Both choices last for the
 session, survive reconnects and never write the saved configuration.
 
-Reactions require the currently revealed question and an active approved socket.
+The reaction protocol remains compatible with older clients, but the current UI
+neither sends nor displays reactions. Legacy reactions require the currently
+revealed question and an active approved socket.
 The Worker rejects stale question IDs and retired/revoked connections. The engine
 enforces a two-second per-participant cooldown and keeps at most 64 reactions for
 the current question. `reactionReadyAt` projects the viewing participant's next
@@ -319,6 +325,18 @@ by the local emulator. Verify updates on the public origin after deployment,
 without changing an active game to run QA.
 
 ## Verification log
+
+Question difficulty and reaction removal, verified locally on 2026-09-26:
+
+- Build, frontend/Worker typechecking, scoped lint and all 182 unit tests pass.
+  The existing projection test now checks the actual question difficulty while
+  continuing to verify that future text and answer keys remain private.
+- Desktop/mobile gameplay checks confirm difficulty beside the category during
+  reading and reveal, a correctly scored answer, retained avatars/celebration,
+  and no reaction controls or counts. No overflow or browser errors occurred.
+- Development and built desktop/mobile smoke checks pass with matching verdicts;
+  all four screenshots were reviewed (`screenshots/snapper-difficulty-*`).
+  The temporary game was closed. No production deployment was performed.
 
 More forgiving judging and session non-repetition, verified on 2026-09-26:
 

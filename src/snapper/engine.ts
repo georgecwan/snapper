@@ -1131,6 +1131,7 @@ export function publicView(state: Session, selfId: string, now: number): Session
             id: `${state.id}:block:${state.blockNumber}:question:${b.index}`,
             text,
             category: q.atom.category,
+            difficulty: q.atom.difficulty,
             format: b.bundle.format,
             readingComplete: q.revealed || text.length >= fullText.length,
             answer: q.revealed ? q.atom.answer.canonical : null,

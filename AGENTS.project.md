@@ -109,11 +109,13 @@ verification plan.
   distinct local cues for your/another player's buzz, correct/incorrect answers,
   clarification, answer timeout and a new question. Preserve mute preferences,
   gesture unlock and silence on reconnect/unmute rather than replaying old events.
-- Approved UX: animated current-question scoring/lead changes, reveal-only
-  reactions, a mobile score strip, session-only emoji avatars and owner-controlled
+- Approved UX: animated current-question scoring/lead changes,
+  a mobile score strip, session-only emoji avatars and owner-controlled
   team names, and format/countdown cues. No streaks, session highlights or badges.
-  Keep reactions bounded and server-authorized; effects cannot change clocks,
-  scoring, eligibility or content visibility. Respect reduced motion.
+  Post-answer emoji reactions have been removed; retain avatars and scoring
+  celebrations. Show question difficulty beside the category during reading.
+  Effects cannot change clocks, scoring, eligibility or content visibility.
+  Respect reduced motion.
 
 ## Working in this repository
 

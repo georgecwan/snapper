@@ -32,6 +32,7 @@ function snapshot(changes: Partial<SessionView> = {}): SessionView {
       id: "question-1",
       text: "A question",
       category: "Science",
+      difficulty: "medium",
       format: "snapper",
       readingComplete: false,
       answer: null,

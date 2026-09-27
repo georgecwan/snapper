@@ -12,6 +12,7 @@ const view = (): DraftView => ({
     id: "question-1",
     text: "This progressive clue is still incomplete",
     category: "Science",
+    difficulty: "medium",
     format: "tossup",
     readingComplete: false,
     answer: null,

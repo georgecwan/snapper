@@ -322,6 +322,9 @@ odds.
   active sounds; reconnecting or enabling audio must not replay old events.
 - Prioritize question readability and mobile typing. Keep the question,
   eligibility, answer field and deadline usable with the phone keyboard open.
+- Show the current question's difficulty beside its category from the start of
+  reading, retaining both through answering and reveal. Use Easy, Medium, Hard
+  or Unrated from the question itself, including when the filter allows any difficulty.
 - Keyboard buzzing must respect focused inputs and buttons. Do not announce
   every progressive character or live answer keystroke through a screen reader
   or convey eligibility solely through color. Respect reduced-motion preferences.
@@ -354,10 +357,10 @@ odds.
 
 ### Play feedback and personality
 
-The owner approved scoring celebrations, post-answer reactions, a mobile score
-strip, emoji avatars/custom team names, and clearer transitions. Animations are
-wanted. Session highlights, streaks, badges and milestone awards were explicitly
-excluded; do not add them as part of this work.
+The owner approved scoring celebrations, a mobile score strip, emoji avatars/custom
+team names, and clearer transitions. Post-answer emoji reactions were subsequently
+removed at the owner's request. Animations are wanted. Session highlights, streaks,
+badges and milestone awards were explicitly excluded; do not add them as part of this work.
 
 - Show the current winner and awarded points beside the revealed answer, animate
   score changes, and mark a genuine change of leader. Ties are explicit. Respect
@@ -366,10 +369,9 @@ excluded; do not add them as part of this work.
 - Keep celebrations brief, within the game layout, and inside the existing reveal
   interval. They must not block answers, cover question text or delay the next
   question. Honour reduced-motion preferences and the existing sound mute.
-- Approved players and spectators may react with 😂, 👏, 😮 or 💀 only after an
-  answer is revealed. The server enforces a two-second per-person cooldown and a
-  bounded list of current-question reactions. Clear reactions on the next
-  question/session; reactions do not extend timers, score or prevent idle pause.
+- Do not show emoji reaction buttons, counts or recent reactions after an answer
+  is revealed. This supersedes the earlier reveal-only reaction feature; player
+  avatars and scoring celebrations remain.
 - Mobile keeps a compact score comparison visible while reading: your score and
   the leader in FFA, both named team totals in team mode. Spectators see the
   leaders. The full scoreboard stays available with one tap.

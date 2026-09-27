@@ -66,6 +66,7 @@ function state(changes: Partial<SessionView> = {}): SessionView {
       id: "question",
       text: "Question text",
       category: "Science",
+      difficulty: "medium",
       format: "snapper",
       readingComplete: true,
       answer: "Answer",

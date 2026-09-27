@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import {
-  REACTIONS,
-  REACTION_COOLDOWN_MS,
-  type GameAction,
-  type Reaction,
-  type SessionView,
-} from "@/snapper/protocol";
+import type { SessionView } from "@/snapper/protocol";
 import { playerAvatar, playerColor } from "@/snapper/identity";
 import { formatReminder, leadChangeText, scoringFeedback } from "@/snapper/play-feedback";
 import "./play-effects.css";
@@ -78,85 +72,6 @@ export function ScoringMoment({ state, connected }: { state: SessionView; connec
         </span>
       )}
     </div>
-  );
-}
-
-const reactionLabels: Record<Reaction, string> = {
-  "😂": "Laugh",
-  "👏": "Applaud",
-  "😮": "Surprised",
-  "💀": "Skull",
-};
-
-export function Reactions({
-  state,
-  send,
-  connected,
-  now,
-}: {
-  state: SessionView;
-  send: (action: GameAction) => boolean;
-  connected: boolean;
-  now: number;
-}) {
-  const [pendingUntil, setPendingUntil] = useState(0);
-  const reactions = state.reactions ?? [];
-  const self = state.players.find((player) => player.id === state.selfId);
-  const questionId = state.question?.id;
-  const ownLatest = reactions.reduce(
-    (latest, reaction) =>
-      reaction.playerId === state.selfId ? Math.max(latest, reaction.at) : latest,
-    -Infinity,
-  );
-  const cooldownUntil = Math.max(
-    state.reactionReadyAt ?? 0,
-    ownLatest + REACTION_COOLDOWN_MS,
-    pendingUntil,
-  );
-  const cooldown = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
-  const disabled = !connected || !self?.connected || self.removed || cooldown > 0;
-  const recent = reactions.filter((reaction) => reaction.at >= now - 6000).slice(-3);
-  if (state.phase !== "reveal" || !questionId) return null;
-  return (
-    <section className="play-reactions" aria-label="Reactions to this answer">
-      <div className="play-reactions-bar">
-        <span className="play-reactions-label">React</span>
-        <div className="play-reaction-buttons">
-          {REACTIONS.map((emoji) => {
-            const count = reactions.filter((reaction) => reaction.emoji === emoji).length;
-            return (
-              <button
-                key={emoji}
-                type="button"
-                disabled={disabled}
-                aria-label={`${reactionLabels[emoji]}${count ? `, ${count} ${count === 1 ? "reaction" : "reactions"}` : ""}${cooldown ? `, ready in ${cooldown} seconds` : ""}`}
-                title={cooldown ? `Ready in ${cooldown}s` : reactionLabels[emoji]}
-                onClick={() => {
-                  if (!disabled && send({ type: "react", emoji }))
-                    setPendingUntil(now + REACTION_COOLDOWN_MS);
-                }}
-              >
-                <span aria-hidden="true">{emoji}</span>
-                <small aria-hidden="true">{count || ""}</small>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div className="play-recent-reactions" aria-live="polite" aria-atomic="false">
-        {recent.map((reaction) => (
-          <span
-            key={reaction.id}
-            className="play-reaction-pill"
-            title={`${reaction.name}: ${reactionLabels[reaction.emoji]}`}
-          >
-            <span aria-hidden="true">{reaction.emoji}</span>
-            <span>{reaction.name}</span>
-            <span className="sr-only">reacted: {reactionLabels[reaction.emoji]}</span>
-          </span>
-        ))}
-      </div>
-    </section>
   );
 }
 
