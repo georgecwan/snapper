@@ -1,0 +1,282 @@
+{
+  "3": {
+    "originalQuestion": "What is the most abundant gas in Earth's atmosphere?",
+    "originalAnswer": "Nitrogen (about 78%)",
+    "canonical": "Nitrogen",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "5": {
+    "originalQuestion": "What is the smallest bone in the human body?",
+    "originalAnswer": "The stapes (stirrup bone) in the middle ear",
+    "canonical": "Stapes",
+    "aliases": ["stirrup bone"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "7": {
+    "originalQuestion": "How many chromosomes do humans have?",
+    "originalAnswer": "46 (23 pairs)",
+    "canonical": "46",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "9": {
+    "originalQuestion": "What is the chemical formula for table salt?",
+    "originalAnswer": "NaCl (sodium chloride)",
+    "canonical": "NaCl",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "10": {
+    "originalQuestion": "What is the speed of light in a vacuum?",
+    "originalAnswer": "Approximately 299,792 km/s",
+    "exclude": "Approximate numeric answer needs explicit precision and unit rules."
+  },
+  "11": {
+    "originalQuestion": "What gas do plants absorb from the atmosphere during photosynthesis?",
+    "originalAnswer": "Carbon dioxide (CO₂)",
+    "canonical": "Carbon dioxide",
+    "aliases": ["CO2"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "13": {
+    "originalQuestion": "What percentage of the human body is water?",
+    "originalAnswer": "About 60%",
+    "exclude": "Body water varies by age and body composition."
+  },
+  "15": {
+    "originalQuestion": "Which country has the most time zones?",
+    "originalAnswer": "France (12 time zones)",
+    "exclude": "Time-zone counts change and depend on treatment of overseas territories."
+  },
+  "17": {
+    "originalQuestion": "What is the deepest point in the ocean?",
+    "originalAnswer": "Challenger Deep in the Mariana Trench (about 10,935 m)",
+    "canonical": "Challenger Deep",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "18": {
+    "originalQuestion": "Which continent has the most countries?",
+    "originalAnswer": "Africa (54 countries)",
+    "canonical": "Africa",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "19": {
+    "originalQuestion": "Which lake is the deepest in the world?",
+    "originalAnswer": "Lake Baikal in Russia (about 1,642 m)",
+    "canonical": "Lake Baikal",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "20": {
+    "originalQuestion": "What is the longest mountain range on land?",
+    "originalAnswer": "The Andes (about 7,000 km)",
+    "canonical": "Andes",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "21": {
+    "originalQuestion": "What is the smallest country in the world by area?",
+    "originalAnswer": "Vatican City (0.44 km²)",
+    "canonical": "Vatican City",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "23": {
+    "originalQuestion": "Which river is the longest in the world?",
+    "originalAnswer": "The Nile (approximately 6,650 km)",
+    "exclude": "Longest river depends on measurement conventions."
+  },
+  "25": {
+    "originalQuestion": "What is the only continent with no active volcanoes?",
+    "originalAnswer": "Australia",
+    "exclude": "Active volcano classification is ambiguous."
+  },
+  "26": {
+    "originalQuestion": "In what year did the Berlin Wall fall?",
+    "originalAnswer": "1989 (November 9)",
+    "canonical": "1989",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "29": {
+    "originalQuestion": "Who painted the ceiling of the Sistine Chapel?",
+    "originalAnswer": "Michelangelo (1508-1512)",
+    "canonical": "Michelangelo",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "32": {
+    "originalQuestion": "What was the shortest war in history?",
+    "originalAnswer": "The Anglo-Zanzibar War (1896), lasting about 38-45 minutes",
+    "canonical": "Anglo-Zanzibar War",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "33": {
+    "originalQuestion": "Which treaty ended World War I?",
+    "originalAnswer": "The Treaty of Versailles (signed June 28, 1919)",
+    "exclude": "Multiple treaties ended the war for different belligerents."
+  },
+  "35": {
+    "originalQuestion": "Who wrote the 'I Have a Dream' speech?",
+    "originalAnswer": "Martin Luther King Jr. (delivered August 28, 1963)",
+    "canonical": "Martin Luther King Jr.",
+    "aliases": ["Martin Luther King"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "36": {
+    "originalQuestion": "What ancient wonder was located in Alexandria, Egypt?",
+    "originalAnswer": "The Lighthouse (Pharos) of Alexandria",
+    "canonical": "Lighthouse of Alexandria",
+    "aliases": ["Pharos of Alexandria"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "37": {
+    "originalQuestion": "What civilization built the Great Pyramid of Giza?",
+    "originalAnswer": "Ancient Egypt (Fourth Dynasty, Old Kingdom)",
+    "canonical": "Ancient Egypt",
+    "aliases": ["Egypt"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "39": {
+    "originalQuestion": "How many squares are on a standard chessboard?",
+    "originalAnswer": "64 (8×8)",
+    "canonical": "64",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "41": {
+    "originalQuestion": "How many teeth does a typical adult human have?",
+    "originalAnswer": "32 (including wisdom teeth)",
+    "canonical": "32",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "42": {
+    "originalQuestion": "What is the most spoken language in the world by native speakers?",
+    "originalAnswer": "Mandarin Chinese",
+    "exclude": "Unanchored population ranking."
+  },
+  "47": {
+    "originalQuestion": "Who invented the telephone?",
+    "originalAnswer": "Alexander Graham Bell (patented 1876)",
+    "exclude": "Inventor attribution is historically contested."
+  },
+  "48": {
+    "originalQuestion": "What is the tallest building in the world?",
+    "originalAnswer": "Burj Khalifa in Dubai (828 m / 2,717 ft)",
+    "exclude": "Unanchored building record."
+  },
+  "49": {
+    "originalQuestion": "In what language was the Bible's Old Testament primarily written?",
+    "originalAnswer": "Hebrew (with some sections in Aramaic)",
+    "canonical": "Hebrew",
+    "aliases": [],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "50": {
+    "originalQuestion": "How many continents are there?",
+    "originalAnswer": "7",
+    "exclude": "Number of continents depends on convention."
+  },
+  "52": {
+    "originalQuestion": "How long is a marathon?",
+    "originalAnswer": "42.195 km (26 miles 385 yards)",
+    "canonical": "42.195 km",
+    "aliases": ["26 miles 385 yards"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "53": {
+    "originalQuestion": "Which country has won the most FIFA World Cup titles?",
+    "originalAnswer": "Brazil (5 titles)",
+    "exclude": "Unanchored sports record."
+  },
+  "56": {
+    "originalQuestion": "In the Olympics, what do the five rings represent?",
+    "originalAnswer": "The five inhabited continents",
+    "exclude": "Continent conventions make this wording ambiguous."
+  },
+  "58": {
+    "originalQuestion": "Which Grand Slam tennis tournament is played on clay courts?",
+    "originalAnswer": "The French Open (Roland Garros)",
+    "canonical": "French Open",
+    "aliases": ["Roland Garros"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "62": {
+    "originalQuestion": "Which athlete has won the most Olympic gold medals?",
+    "originalAnswer": "Michael Phelps (23 gold medals)",
+    "exclude": "Unanchored sports record."
+  },
+  "64": {
+    "originalQuestion": "What is the main ingredient in hummus?",
+    "originalAnswer": "Chickpeas (garbanzo beans)",
+    "canonical": "Chickpeas",
+    "aliases": ["garbanzo beans"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "65": {
+    "originalQuestion": "Which country produces the most coffee in the world?",
+    "originalAnswer": "Brazil",
+    "exclude": "Unanchored production ranking."
+  },
+  "67": {
+    "originalQuestion": "What gives bread its holes?",
+    "originalAnswer": "Carbon dioxide produced by yeast during fermentation",
+    "canonical": "Carbon dioxide",
+    "aliases": ["CO2"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "68": {
+    "originalQuestion": "What is the most consumed beverage in the world after water?",
+    "originalAnswer": "Tea",
+    "exclude": "Unanchored beverage consumption ranking."
+  },
+  "71": {
+    "originalQuestion": "In which country did the croissant originate?",
+    "originalAnswer": "Austria",
+    "exclude": "Croissant versus precursor origin is ambiguous."
+  },
+  "73": {
+    "originalQuestion": "What country is the origin of sushi?",
+    "originalAnswer": "Japan",
+    "exclude": "Sushi versus precursor origin is ambiguous."
+  },
+  "87": {
+    "originalQuestion": "In Norse mythology, what is Ragnarök?",
+    "originalAnswer": "The prophesied end of the world (the twilight of the gods)",
+    "exclude": "Explanatory answer is unsuitable for exact typed response."
+  },
+  "88": {
+    "originalQuestion": "What fictional metal is Captain America's shield made from?",
+    "originalAnswer": "Vibranium",
+    "exclude": "Shield material differs between comics and films."
+  },
+  "90": {
+    "originalQuestion": "What is the name of the fictional continent in Game of Thrones?",
+    "originalAnswer": "Westeros",
+    "exclude": "Game of Thrones contains multiple fictional continents."
+  },
+  "92": {
+    "originalQuestion": "What is the highest-grossing film of all time (not adjusted for inflation)?",
+    "originalAnswer": "Avatar (2009)",
+    "exclude": "Unanchored box-office record."
+  },
+  "96": {
+    "originalQuestion": "What is the name of Batman's butler?",
+    "originalAnswer": "Alfred Pennyworth",
+    "canonical": "Alfred Pennyworth",
+    "aliases": ["Alfred"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  },
+  "98": {
+    "originalQuestion": "What is the name of the fictional school in the Harry Potter series?",
+    "originalAnswer": "Hogwarts School of Witchcraft and Wizardry",
+    "canonical": "Hogwarts School of Witchcraft and Wizardry",
+    "aliases": ["Hogwarts"],
+    "reason": "Separate the explanatory detail from the requested answer; retain explicit equivalent names."
+  }
+}

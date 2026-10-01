@@ -1,28 +1,28 @@
 {
   "version": 1,
-  "total": 77947,
-  "conflictingPrompts": 18,
+  "total": 115929,
+  "conflictingPrompts": 29,
   "groups": [
     {
       "format": "snapper",
       "category": "Arts",
       "difficulty": "easy",
       "index": "snapper/arts/easy/index.json",
-      "count": 124
+      "count": 250
     },
     {
       "format": "snapper",
       "category": "Arts",
       "difficulty": "hard",
       "index": "snapper/arts/hard/index.json",
-      "count": 92
+      "count": 934
     },
     {
       "format": "snapper",
       "category": "Arts",
       "difficulty": "medium",
       "index": "snapper/arts/medium/index.json",
-      "count": 209
+      "count": 654
     },
     {
       "format": "snapper",
@@ -36,133 +36,133 @@
       "category": "Entertainment",
       "difficulty": "easy",
       "index": "snapper/entertainment/easy/index.json",
-      "count": 519
+      "count": 567
     },
     {
       "format": "snapper",
       "category": "Entertainment",
       "difficulty": "hard",
       "index": "snapper/entertainment/hard/index.json",
-      "count": 326
+      "count": 804
     },
     {
       "format": "snapper",
       "category": "Entertainment",
       "difficulty": "medium",
       "index": "snapper/entertainment/medium/index.json",
-      "count": 731
+      "count": 1059
     },
     {
       "format": "snapper",
       "category": "Entertainment",
       "difficulty": "unrated",
       "index": "snapper/entertainment/unrated/index.json",
-      "count": 9518
+      "count": 9528
     },
     {
       "format": "snapper",
       "category": "General",
       "difficulty": "easy",
       "index": "snapper/general/easy/index.json",
-      "count": 168
+      "count": 266
     },
     {
       "format": "snapper",
       "category": "General",
       "difficulty": "hard",
       "index": "snapper/general/hard/index.json",
-      "count": 62
+      "count": 404
     },
     {
       "format": "snapper",
       "category": "General",
       "difficulty": "medium",
       "index": "snapper/general/medium/index.json",
-      "count": 131
+      "count": 533
     },
     {
       "format": "snapper",
       "category": "General",
       "difficulty": "unrated",
       "index": "snapper/general/unrated/index.json",
-      "count": 13340
+      "count": 13341
     },
     {
       "format": "snapper",
       "category": "Geography",
       "difficulty": "easy",
       "index": "snapper/geography/easy/index.json",
-      "count": 69
+      "count": 139
     },
     {
       "format": "snapper",
       "category": "Geography",
       "difficulty": "hard",
       "index": "snapper/geography/hard/index.json",
-      "count": 58
+      "count": 461
     },
     {
       "format": "snapper",
       "category": "Geography",
       "difficulty": "medium",
       "index": "snapper/geography/medium/index.json",
-      "count": 117
+      "count": 448
     },
     {
       "format": "snapper",
       "category": "Geography",
       "difficulty": "unrated",
       "index": "snapper/geography/unrated/index.json",
-      "count": 601
+      "count": 606
     },
     {
       "format": "snapper",
       "category": "History",
       "difficulty": "easy",
       "index": "snapper/history/easy/index.json",
-      "count": 67
+      "count": 106
     },
     {
       "format": "snapper",
       "category": "History",
       "difficulty": "hard",
       "index": "snapper/history/hard/index.json",
-      "count": 83
+      "count": 416
     },
     {
       "format": "snapper",
       "category": "History",
       "difficulty": "medium",
       "index": "snapper/history/medium/index.json",
-      "count": 160
+      "count": 525
     },
     {
       "format": "snapper",
       "category": "History",
       "difficulty": "unrated",
       "index": "snapper/history/unrated/index.json",
-      "count": 1139
+      "count": 1146
     },
     {
       "format": "snapper",
       "category": "Literature",
       "difficulty": "easy",
       "index": "snapper/literature/easy/index.json",
-      "count": 29
+      "count": 50
     },
     {
       "format": "snapper",
       "category": "Literature",
       "difficulty": "hard",
       "index": "snapper/literature/hard/index.json",
-      "count": 25
+      "count": 177
     },
     {
       "format": "snapper",
       "category": "Literature",
       "difficulty": "medium",
       "index": "snapper/literature/medium/index.json",
-      "count": 42
+      "count": 130
     },
     {
       "format": "snapper",
@@ -197,21 +197,63 @@
       "category": "Mythology",
       "difficulty": "easy",
       "index": "snapper/mythology/easy/index.json",
-      "count": 14
+      "count": 22
     },
     {
       "format": "snapper",
       "category": "Mythology",
       "difficulty": "hard",
       "index": "snapper/mythology/hard/index.json",
-      "count": 10
+      "count": 37
     },
     {
       "format": "snapper",
       "category": "Mythology",
       "difficulty": "medium",
       "index": "snapper/mythology/medium/index.json",
-      "count": 24
+      "count": 43
+    },
+    {
+      "format": "snapper",
+      "category": "Mythology",
+      "difficulty": "unrated",
+      "index": "snapper/mythology/unrated/index.json",
+      "count": 11
+    },
+    {
+      "format": "snapper",
+      "category": "Philosophy",
+      "difficulty": "hard",
+      "index": "snapper/philosophy/hard/index.json",
+      "count": 52
+    },
+    {
+      "format": "snapper",
+      "category": "Philosophy",
+      "difficulty": "medium",
+      "index": "snapper/philosophy/medium/index.json",
+      "count": 6
+    },
+    {
+      "format": "snapper",
+      "category": "Religion",
+      "difficulty": "easy",
+      "index": "snapper/religion/easy/index.json",
+      "count": 6
+    },
+    {
+      "format": "snapper",
+      "category": "Religion",
+      "difficulty": "hard",
+      "index": "snapper/religion/hard/index.json",
+      "count": 25
+    },
+    {
+      "format": "snapper",
+      "category": "Religion",
+      "difficulty": "medium",
+      "index": "snapper/religion/medium/index.json",
+      "count": 34
     },
     {
       "format": "snapper",
@@ -225,301 +267,313 @@
       "category": "Science",
       "difficulty": "easy",
       "index": "snapper/science/easy/index.json",
-      "count": 137
+      "count": 290
     },
     {
       "format": "snapper",
       "category": "Science",
       "difficulty": "hard",
       "index": "snapper/science/hard/index.json",
-      "count": 95
+      "count": 523
     },
     {
       "format": "snapper",
       "category": "Science",
       "difficulty": "medium",
       "index": "snapper/science/medium/index.json",
-      "count": 172
+      "count": 676
     },
     {
       "format": "snapper",
       "category": "Science",
       "difficulty": "unrated",
       "index": "snapper/science/unrated/index.json",
-      "count": 2157
+      "count": 2164
     },
     {
       "format": "snapper",
       "category": "Social Science",
       "difficulty": "easy",
       "index": "snapper/social-science/easy/index.json",
-      "count": 9
+      "count": 105
     },
     {
       "format": "snapper",
       "category": "Social Science",
       "difficulty": "hard",
       "index": "snapper/social-science/hard/index.json",
-      "count": 12
+      "count": 229
     },
     {
       "format": "snapper",
       "category": "Social Science",
       "difficulty": "medium",
       "index": "snapper/social-science/medium/index.json",
-      "count": 23
+      "count": 365
     },
     {
       "format": "snapper",
       "category": "Sport",
       "difficulty": "easy",
       "index": "snapper/sport/easy/index.json",
-      "count": 51
+      "count": 93
     },
     {
       "format": "snapper",
       "category": "Sport",
       "difficulty": "hard",
       "index": "snapper/sport/hard/index.json",
-      "count": 24
+      "count": 200
     },
     {
       "format": "snapper",
       "category": "Sport",
       "difficulty": "medium",
       "index": "snapper/sport/medium/index.json",
-      "count": 64
+      "count": 205
     },
     {
       "format": "snapper",
       "category": "Sport",
       "difficulty": "unrated",
       "index": "snapper/sport/unrated/index.json",
-      "count": 1994
+      "count": 2003
     },
     {
       "format": "tossup",
       "category": "Arts",
       "difficulty": "easy",
       "index": "tossup/arts/easy/index.json",
-      "count": 69
+      "count": 68
     },
     {
       "format": "tossup",
       "category": "Arts",
       "difficulty": "hard",
       "index": "tossup/arts/hard/index.json",
-      "count": 4111
+      "count": 5944
     },
     {
       "format": "tossup",
       "category": "Arts",
       "difficulty": "medium",
       "index": "tossup/arts/medium/index.json",
-      "count": 801
+      "count": 2641
     },
     {
       "format": "tossup",
       "category": "Entertainment",
       "difficulty": "easy",
       "index": "tossup/entertainment/easy/index.json",
-      "count": 45
+      "count": 44
     },
     {
       "format": "tossup",
       "category": "Entertainment",
       "difficulty": "hard",
       "index": "tossup/entertainment/hard/index.json",
-      "count": 922
+      "count": 1324
     },
     {
       "format": "tossup",
       "category": "Entertainment",
       "difficulty": "medium",
       "index": "tossup/entertainment/medium/index.json",
-      "count": 214
+      "count": 628
     },
     {
       "format": "tossup",
       "category": "Geography",
       "difficulty": "easy",
       "index": "tossup/geography/easy/index.json",
-      "count": 47
+      "count": 62
     },
     {
       "format": "tossup",
       "category": "Geography",
       "difficulty": "hard",
       "index": "tossup/geography/hard/index.json",
-      "count": 874
+      "count": 1258
     },
     {
       "format": "tossup",
       "category": "Geography",
       "difficulty": "medium",
       "index": "tossup/geography/medium/index.json",
-      "count": 295
+      "count": 849
     },
     {
       "format": "tossup",
       "category": "History",
       "difficulty": "easy",
       "index": "tossup/history/easy/index.json",
-      "count": 109
+      "count": 110
     },
     {
       "format": "tossup",
       "category": "History",
       "difficulty": "hard",
       "index": "tossup/history/hard/index.json",
-      "count": 7244
+      "count": 11019
     },
     {
       "format": "tossup",
       "category": "History",
       "difficulty": "medium",
       "index": "tossup/history/medium/index.json",
-      "count": 1317
+      "count": 5120
     },
     {
       "format": "tossup",
       "category": "Literature",
       "difficulty": "easy",
       "index": "tossup/literature/easy/index.json",
-      "count": 165
+      "count": 151
     },
     {
       "format": "tossup",
       "category": "Literature",
       "difficulty": "hard",
       "index": "tossup/literature/hard/index.json",
-      "count": 8357
+      "count": 13348
     },
     {
       "format": "tossup",
       "category": "Literature",
       "difficulty": "medium",
       "index": "tossup/literature/medium/index.json",
-      "count": 1706
+      "count": 5515
     },
     {
       "format": "tossup",
       "category": "Mythology",
       "difficulty": "easy",
       "index": "tossup/mythology/easy/index.json",
-      "count": 33
+      "count": 39
     },
     {
       "format": "tossup",
       "category": "Mythology",
       "difficulty": "hard",
       "index": "tossup/mythology/hard/index.json",
-      "count": 1279
+      "count": 1833
     },
     {
       "format": "tossup",
       "category": "Mythology",
       "difficulty": "medium",
       "index": "tossup/mythology/medium/index.json",
-      "count": 448
+      "count": 918
     },
     {
       "format": "tossup",
       "category": "Philosophy",
       "difficulty": "easy",
       "index": "tossup/philosophy/easy/index.json",
-      "count": 3
+      "count": 4
     },
     {
       "format": "tossup",
       "category": "Philosophy",
       "difficulty": "hard",
       "index": "tossup/philosophy/hard/index.json",
-      "count": 1142
+      "count": 1728
     },
     {
       "format": "tossup",
       "category": "Philosophy",
       "difficulty": "medium",
       "index": "tossup/philosophy/medium/index.json",
-      "count": 191
+      "count": 636
     },
     {
       "format": "tossup",
       "category": "Religion",
       "difficulty": "easy",
       "index": "tossup/religion/easy/index.json",
-      "count": 19
+      "count": 24
     },
     {
       "format": "tossup",
       "category": "Religion",
       "difficulty": "hard",
       "index": "tossup/religion/hard/index.json",
-      "count": 720
+      "count": 1022
     },
     {
       "format": "tossup",
       "category": "Religion",
       "difficulty": "medium",
       "index": "tossup/religion/medium/index.json",
-      "count": 230
+      "count": 546
     },
     {
       "format": "tossup",
       "category": "Science",
       "difficulty": "easy",
       "index": "tossup/science/easy/index.json",
-      "count": 135
+      "count": 145
     },
     {
       "format": "tossup",
       "category": "Science",
       "difficulty": "hard",
       "index": "tossup/science/hard/index.json",
-      "count": 5480
+      "count": 8073
     },
     {
       "format": "tossup",
       "category": "Science",
       "difficulty": "medium",
       "index": "tossup/science/medium/index.json",
-      "count": 1568
+      "count": 4259
     },
     {
       "format": "tossup",
       "category": "Social Science",
       "difficulty": "easy",
       "index": "tossup/social-science/easy/index.json",
-      "count": 10
+      "count": 6
     },
     {
       "format": "tossup",
       "category": "Social Science",
       "difficulty": "hard",
       "index": "tossup/social-science/hard/index.json",
-      "count": 2600
+      "count": 3046
     },
     {
       "format": "tossup",
       "category": "Social Science",
       "difficulty": "medium",
       "index": "tossup/social-science/medium/index.json",
-      "count": 222
+      "count": 741
     }
   ],
   "sources": {
     "opentdb": {
       "raw": 5298,
-      "imported": 3699,
-      "rejected": 1590,
+      "imported": 3697,
+      "rejected": 1592,
       "duplicates": 9
+    },
+    "the-trivia-api": {
+      "raw": 8432,
+      "imported": 7189,
+      "rejected": 1223,
+      "duplicates": 20
+    },
+    "learnclash": {
+      "raw": 100,
+      "imported": 73,
+      "rejected": 21,
+      "duplicates": 6
     },
     "qanta-train": {
       "raw": 112927,
-      "imported": 37356,
-      "rejected": 74181,
-      "duplicates": 1390
+      "imported": 68101,
+      "rejected": 41418,
+      "duplicates": 3408
     },
     "qanta-dev": {
       "raw": 2216,
@@ -535,9 +589,9 @@
     },
     "opentriviaqa": {
       "raw": 49716,
-      "imported": 33892,
-      "rejected": 15557,
-      "duplicates": 267
+      "imported": 33869,
+      "rejected": 15561,
+      "duplicates": 286
     }
   }
 }

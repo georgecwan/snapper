@@ -13,6 +13,9 @@ import {
   parseOpenTriviaFile,
   qantaAtom,
   shortAtom,
+  triviaApiAtom,
+  parseLearnClashFile,
+  learnClashAtom,
 } from "./question-import.mjs";
 
 const root = new URL("../", import.meta.url);
@@ -33,7 +36,12 @@ const originalIds = new Set(
 );
 const stats = {};
 function accept(atom, format, source) {
-  if (!atom || [atom.answer.canonical, ...atom.answer.aliases].some((value) => judgeAnswer(value, atom.answer) !== "accept")) {
+  if (
+    !atom ||
+    [atom.answer.canonical, ...atom.answer.aliases].some(
+      (value) => judgeAnswer(value, atom.answer) !== "accept",
+    )
+  ) {
     stats[source].rejected++;
     return;
   }
@@ -85,6 +93,26 @@ for (const row of trivia.results) {
   }
   accept(atom, "snapper", "opentdb");
 }
+
+const triviaApi = JSON.parse(
+  gunzipSync(await readFile(new URL("the-trivia-api.json.gz", sources))),
+);
+start("the-trivia-api", triviaApi.results.length);
+const triviaReview = JSON.parse(
+  await readFile(new URL("data/reviews/the-trivia-api.json", root), "utf8"),
+);
+for (const row of triviaApi.results)
+  accept(triviaApiAtom(row, triviaReview), "snapper", "the-trivia-api");
+
+const learnClash = parseLearnClashFile(
+  gunzipSync(await readFile(new URL("learnclash.html.gz", sources))).toString("utf8"),
+);
+if (learnClash.length !== 100 || new Set(learnClash.map((q) => q.id)).size !== 100)
+  throw new Error("Unexpected LearnClash source inventory");
+const review = JSON.parse(await readFile(new URL("data/reviews/learnclash.json", root), "utf8"));
+start("learnclash", learnClash.length);
+for (const row of learnClash)
+  accept(learnClashAtom(row, sourceManifest.learnClashRevision, review), "snapper", "learnclash");
 
 for (const source of sourceManifest.files.filter((s) => s.file.startsWith("qanta."))) {
   const dataset = JSON.parse(gunzipSync(await readFile(new URL(source.file, sources))));

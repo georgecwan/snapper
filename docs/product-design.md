@@ -323,8 +323,12 @@ odds.
   notices and required attribution. An available API does not automatically
   authorize copying its whole corpus into the repository.
 - The owner requested as many useful local questions as possible. The repository
-  now includes licensed QANTA 2018, OpenTriviaQA and OpenTDB snapshots, with 77,947
-  filtered additions. See [question data](../data/README.md) for exact attribution,
+  now includes licensed QANTA 2018, OpenTriviaQA, OpenTDB, The Trivia API and
+  LearnClash snapshots, with 115,929 filtered additions. The 2026-10-01 expansion
+  recovers explicit required-word answer notation from QANTA's Protobowl records
+  and adds suitable short questions under each source's license, including the
+  noncommercial restriction on The Trivia API. No paid service is used.
+  See [question data](../data/README.md) for exact attribution,
   conversion limits and counts. Imports are screened and sampled, not all
   individually fact-checked. Unrated source questions stay explicitly Unrated;
   existing saved/default filters are not silently expanded.

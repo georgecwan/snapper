@@ -216,18 +216,26 @@ messaging services may retain previously cached page previews after deployment.
 
 The original reviewed fallback contains 35 long tossups, 96 short atoms, 24
 related four-part groups, eight sequences and eight four-clue questions. The
-large imported pack adds **77,947** unique playable atoms: 40,356 QANTA tossups,
-33,892 OpenTriviaQA short questions and 3,699 OpenTDB short questions. Combined
-with the originals there are 78,094 atoms; group reuse is not counted twice.
+large imported pack adds **115,929** unique playable atoms: 71,101 QANTA tossups,
+33,869 OpenTriviaQA, 7,189 The Trivia API, 3,697 OpenTDB and 73 LearnClash short
+questions. Combined with the originals there are 116,076 atoms; group reuse is
+not counted twice. The 2026-10-01 expansion adds a net 37,982 imported questions.
 
 Read [the data guide](../data/README.md) for licenses, exact pinned snapshots,
 quality limits, source difficulty mapping and offline rebuild commands. All
-imports retain CC BY-SA 4.0 attribution. They have automated structural screening
+imports retain their source-specific attribution: CC BY-SA 4.0 for the existing
+three collections, CC BY-NC 4.0 for The Trivia API, and CC BY 4.0 for LearnClash.
+They have automated structural screening
 and sampled review, not individual fact-checking. Unknown difficulty stays
 Unrated; the initial medium and previously saved filters remain unchanged.
 
 `npm run questions:import` regenerates shards offline; `npm run questions:check`
-checks every record and index. Builds copy generated shards into the private
+checks every record and index and exercises all 78 groups through the Worker
+loader. Protobowl-origin required-word braces become explicit aliases; unsupported
+answer instructions remain excluded. Reviewed source overrides assert the old
+text/key so future updates cannot silently reuse them. The Trivia API maintenance
+downloader is bounded, rate-limited and resumable; it is never used by builds or
+live gameplay. Builds copy generated shards into the private
 `/_question-packs` asset prefix without bundling them into client JavaScript or
 Worker code. The Durable Object loads only selected indexes/shards, with bounded
 caches. `run_worker_first: true` and the Worker guard block every public download
@@ -362,6 +370,31 @@ by the local emulator. Verify updates on the public origin after deployment,
 without changing an active game to run QA.
 
 ## Verification log
+
+Question-source expansion, verified locally on 2026-10-01; **not deployed**:
+
+- The bank now has **115,929 imported questions / 116,076 including originals**,
+  a net gain of 37,982. It includes 7,189 screened The Trivia API questions and
+  73 LearnClash questions; improved explicit required-word parsing raises QANTA
+  to 71,101. The source archive retains 8,432 raw Trivia API records and all 100
+  LearnClash records, including exclusions. Source-specific licenses are preserved.
+- **201 unit tests** and **8 multiplayer integration tests** pass, as do the
+  production build, frontend/Worker typechecking, scoped lint and Worker packaging
+  dry run. Parser regressions cover required spans, numeric qualifiers, explicit
+  rejects, malformed/unbracketed instructions, source validation, reviewed
+  exclusions and literal-only HTML data extraction.
+- `questions:check` validates all 115,929 questions, 951 shards and 78 groups,
+  including every accepted alias and source license. The actual Worker loader
+  successfully selects distinct, correctly filtered questions from every group.
+  A second offline import reproduces all 1,030 generated JSON files byte-for-byte.
+- Sampled review added 23 explicit Trivia API exclusions and reviewed LearnClash
+  adaptations/exclusions. These are screened imports, not a claim of individual
+  fact-checking across the corpus. Unsupported answer rules and unclear source
+  rights remain excluded. No new live provider or paid service was added.
+- Desktop/mobile development and built smoke checks match, with no overflow,
+  console errors or brand/auth warnings; all four screenshots were reviewed
+  (`screenshots/snapper-question-expansion-*`). Private-pack HTTP denial and
+  session non-repetition pass the multiplayer checks. The preview remains running.
 
 Owner team reassignment, verified locally on 2026-09-26:
 

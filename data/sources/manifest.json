@@ -42,6 +42,26 @@
       "licenseEvidence": "https://opentdb.com/api_config.php",
       "license": "CC-BY-SA-4.0",
       "retrievedAt": "2026-09-26T06:47:11.377Z"
+    },
+    {
+      "file": "learnclash.html.gz",
+      "sha256": "36e85cc1a701ddba12ef67bca942297bd79c1fad858c307f8cc64de21a65aece",
+      "uncompressedSha256": "ff006bf0542de4df114fba74ef539cd11365d39ea704f6d64c2a4588f319a9f6",
+      "upstream": "https://raw.githubusercontent.com/Pluxia-GmbH/learnclash-open-trivia/219b618fe569982a4a4b11a275a8f0d98b4661cd/index.html",
+      "licenseEvidence": "https://github.com/Pluxia-GmbH/learnclash-open-trivia/blob/219b618fe569982a4a4b11a275a8f0d98b4661cd/README.md",
+      "license": "CC-BY-4.0",
+      "retrievedAt": "2026-10-01T07:08:42.695Z"
+    },
+    {
+      "file": "the-trivia-api.json.gz",
+      "sha256": "195b4e71c928aa8f3a236cd78d8f095bffae081e67af153f803490d4677bb032",
+      "uncompressedSha256": "ff2a0bf3a5b78c9c03369fa41d3e59425190b876844b9a9e107f387e700a882f",
+      "upstream": "https://the-trivia-api.com/v2/questions",
+      "licenseEvidence": "https://the-trivia-api.com/",
+      "license": "CC-BY-NC-4.0",
+      "retrievedAt": "2026-10-01T07:18:19.230Z"
     }
-  ]
+  ],
+  "learnClashRevision": "219b618fe569982a4a4b11a275a8f0d98b4661cd",
+  "updatedAt": "2026-10-01T07:18:19.230Z"
 }

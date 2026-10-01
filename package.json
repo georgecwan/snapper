@@ -21,7 +21,7 @@
     "check:auth": "node scripts/check-auth-invariant.mjs",
     "test": "npm run test:snapper",
     "lint": "eslint .",
-    "lint:snapper": "eslint src/snapper src/components/snapper worker scripts/dev.mjs scripts/build-brand.mjs scripts/build-worker-assets.mjs scripts/snapper-preview.mjs scripts/check-share-preview.mjs scripts/test-integration.mjs vite.config.ts scripts/question-import.mjs scripts/question-import.test.mjs scripts/import-questions.mjs scripts/check-questions.mjs scripts/prepare-question-assets.mjs scripts/download-opentdb.mjs --max-warnings 0",
+    "lint:snapper": "eslint src/snapper src/components/snapper worker scripts/dev.mjs scripts/build-brand.mjs scripts/build-worker-assets.mjs scripts/snapper-preview.mjs scripts/check-share-preview.mjs scripts/test-integration.mjs vite.config.ts scripts/question-import.mjs scripts/question-import.test.mjs scripts/import-questions.mjs scripts/check-questions.mjs scripts/prepare-question-assets.mjs scripts/download-opentdb.mjs --max-warnings 0 scripts/download-trivia-api.mjs",
     "format": "prettier --write .",
     "build:legacy": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
     "test:snapper": "node --experimental-strip-types --test src/snapper/*.test.ts worker/*.test.ts scripts/question-import.test.mjs",
@@ -34,7 +34,8 @@
     "build:brand": "node scripts/build-brand.mjs",
     "questions:import": "node --experimental-strip-types scripts/import-questions.mjs",
     "questions:check": "node --experimental-strip-types scripts/check-questions.mjs",
-    "questions:download:opentdb": "node scripts/download-opentdb.mjs"
+    "questions:download:opentdb": "node scripts/download-opentdb.mjs",
+    "questions:download:trivia-api": "node scripts/download-trivia-api.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",

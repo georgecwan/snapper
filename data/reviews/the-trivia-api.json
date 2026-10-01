@@ -1,0 +1,121 @@
+{
+  "622a1c347cc59eab6f94fb33": {
+    "originalQuestion": "Which film won the Academy Award for Best Picture in 2005?",
+    "originalAnswer": "Crash",
+    "exclude": "Award ceremony year and film release year are ambiguous in this key."
+  },
+  "622a1c367cc59eab6f9503da": {
+    "originalQuestion": "What mistake did Coca-Cola make in 1985?",
+    "originalAnswer": "New Coke",
+    "exclude": "Subjective premise without a specific event requested."
+  },
+  "622a1c397cc59eab6f950fbb": {
+    "originalQuestion": "Who Invented the worlds first electronic pocket calculator in 1972?",
+    "originalAnswer": "Clive Sinclair",
+    "exclude": "The claimed first and its date/attribution need correction.",
+    "evidence": "https://americanhistory.si.edu/ne/collections/object/nmah_1329686"
+  },
+  "622a1c3a7cc59eab6f951075": {
+    "originalQuestion": "What chemical compound causes pain in muscles after exercise?",
+    "originalAnswer": "Lactic acid",
+    "exclude": "Misleading lactic-acid explanation of post-exercise muscle pain.",
+    "evidence": "https://www.acsm.org/docs/default-source/files-for-resource-library/delayed-onset-muscle-soreness-%28doms%29.pdf"
+  },
+  "622a1c3a7cc59eab6f9510d4": {
+    "originalQuestion": "How fast (mph) can a kangaroo hop?",
+    "originalAnswer": "Forty",
+    "exclude": "Speed varies by species and conditions; no uniquely specified value."
+  },
+  "622a1c3b7cc59eab6f95171c": {
+    "originalQuestion": "What was the first Chinese dynasty?",
+    "originalAnswer": "Shang",
+    "exclude": "Does not distinguish traditional dynastic history from archaeological attestation."
+  },
+  "622a1c3f7cc59eab6f95238f": {
+    "originalQuestion": "Acetic Acid Is More Commonly Known As What?",
+    "originalAnswer": "Vinegar",
+    "exclude": "Vinegar is an aqueous solution containing acetic acid, not its synonym."
+  },
+  "625fd6e5dc0dd3b72da64d13": {
+    "originalQuestion": "In which year was Scarface released?",
+    "originalAnswer": "1983",
+    "exclude": "Does not distinguish the 1932 and 1983 films."
+  },
+  "62611fe54b176d54800e3d78": {
+    "originalQuestion": "When did Alan Turing break the Enigma code?",
+    "originalAnswer": "1945",
+    "exclude": "Misleading single-date premise; the keyed 1945 answer is unsuitable.",
+    "evidence": "https://bletchleypark.org.uk/wp-content/uploads/record_attachments/1800.pdf"
+  },
+  "63adbd7704c68cc1e14b8e4a": {
+    "originalQuestion": "Which type of tree is known for its hard wood and conical shape?",
+    "originalAnswer": "Pine Tree",
+    "exclude": "Description is not uniquely identifying and the keyed softwood conflicts with it."
+  },
+  "63e4c36c106de6ffa7d4a7f3": {
+    "originalQuestion": "What religion was practiced by the Holy Roman Empire?",
+    "originalAnswer": "Catholicism",
+    "exclude": "Oversimplifies a multi-confessional empire without specifying a date."
+  },
+  "622a1c367cc59eab6f950245": {
+    "originalQuestion": "Which German spirit is flavoured with caraway seeds and distilled from potatoes?",
+    "originalAnswer": "Schnapps ",
+    "exclude": "Overbroad Schnapps key for a description of a specific caraway spirit."
+  },
+  "622a1c3b7cc59eab6f9515b2": {
+    "originalQuestion": "How did chocolate get its name?",
+    "originalAnswer": "The Spanish imitation of an Aztec word ",
+    "exclude": "Explanatory etymology is not suitable as an exact typed answer."
+  },
+  "624ab0a5348a461bfc67068b": {
+    "originalQuestion": "Where in the world are yams originally from?",
+    "originalAnswer": "Africa",
+    "exclude": "Multiple yam species have different geographic origins."
+  },
+  "624ab0b7348a461bfc670692": {
+    "originalQuestion": "From which part of the world do plums originate?",
+    "originalAnswer": "The Middle East",
+    "exclude": "Multiple cultivated plum species have different geographic origins."
+  },
+  "622a1c397cc59eab6f950c47": {
+    "originalQuestion": "Which American rock band released the album 'Smile'?",
+    "originalAnswer": "The Beach Boys",
+    "exclude": "Ambiguous between Brian Wilson’s completed album and the Beach Boys’ Smile Sessions release."
+  },
+  "6266bc59ff2394bd44dee002": {
+    "originalQuestion": "What type of instrument is a harpsichord?",
+    "originalAnswer": "Stringed",
+    "exclude": "Both keyboard and string classifications are valid; the source key alone is insufficient."
+  },
+  "64a9daf98e13b3b23eb9fde9": {
+    "originalQuestion": "In 1998, which member of The Fugees won the Best New Artist Grammy for her first solo album?",
+    "originalAnswer": "Lauryn Hill",
+    "exclude": "The award year in the premise is incorrect.",
+    "evidence": "https://www.grammy.com/awards/41st-annual-grammy-awards/"
+  },
+  "622a1c367cc59eab6f950183": {
+    "originalQuestion": "What was the sequel to Louisa May Alcott's \"Little Women\"?",
+    "originalAnswer": "Little Men",
+    "exclude": "Part two was separately published as Good Wives; the sequel wording does not distinguish editions."
+  },
+  "622a1c397cc59eab6f950e2e": {
+    "originalQuestion": "Which author wrote 'Metamorphoses'?",
+    "originalAnswer": "Ovid",
+    "exclude": "Does not distinguish the works of Ovid and Apuleius."
+  },
+  "622a1c397cc59eab6f950e79": {
+    "originalQuestion": "Which author wrote 'The Alchemist'?",
+    "originalAnswer": "Paulo Coelho",
+    "exclude": "Does not distinguish the novel from the play of the same title."
+  },
+  "622a1c3a7cc59eab6f951315": {
+    "originalQuestion": "In one of Donald Horne's novels, which was \"the lucky country\"?",
+    "originalAnswer": "Australia",
+    "exclude": "The Lucky Country is nonfiction; the question has a false premise."
+  },
+  "646140b54d46e537ca8cd9fc": {
+    "originalQuestion": "In DC comics, What is the secret identity of 'Dick Grayson'?",
+    "originalAnswer": "Robin",
+    "exclude": "Dick Grayson has multiple superhero identities, including Robin and Nightwing."
+  }
+}

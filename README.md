@@ -9,7 +9,7 @@ can join; games support free-for-all or two teams and seven text question format
 - [Product design](docs/product-design.md): the approved rules and requirements.
 - [Implementation guide](docs/implementation.md): code map, content, checks and deployment setup.
 - [Cloudflare setup](docs/cloudflare-setup.md): account, free limits, owner sign-in and deployment steps.
-- [Repository question bank](data/README.md): 77,947 imported questions, source licenses, quality limits and offline maintenance.
+- [Repository question bank](data/README.md): 115,929 imported questions, source licenses, quality limits and offline maintenance.
 - [Architecture audit](docs/architecture-audit.md): historical prototype findings and hosting research.
 - [Agent instructions](AGENTS.project.md): constraints future coding sessions must preserve.
 
