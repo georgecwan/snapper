@@ -1407,3 +1407,46 @@ test("a pending move cannot overfill a team when retried between blocks", () => 
     );
   }
 });
+
+test("frequency changes stay pending through a block and survive recovery without changing scores", () => {
+  let s = start("open");
+  s.players[0]!.score = 25;
+  const currentId = s.question!.atom.id;
+  const next = {
+    ...s.config,
+    formatBalance: "frequency" as const,
+    formatWeights: { open: 4 },
+    categoryWeights: { Science: 2 },
+    difficulty: "any" as const,
+    difficultyWeights: { hard: 0 },
+  };
+  assert.ok(transition(s, "b", { type: "configure", config: next }, 0).error);
+  s = configureSession(s, next, 1);
+  const recovered = migrateSession(JSON.parse(JSON.stringify(s)), 2);
+  assert.deepEqual(recovered.config.formatWeights, {});
+  assert.deepEqual(recovered.pendingConfig?.formatWeights, { open: 4 });
+  assert.equal(recovered.question!.atom.id, currentId);
+  assert.equal(recovered.players[0]!.score, 25);
+  const ended = act(recovered, "a", { type: "end-block" }, 3);
+  const nextBlock = startBlock(ended, bundle("snapper", [atom(300)]), 4);
+  assert.deepEqual(nextBlock.config.formatWeights, { open: 4 });
+  assert.deepEqual(nextBlock.config.difficultyWeights, { hard: 0 });
+  assert.equal(nextBlock.players[0]!.score, 25);
+  assert.ok(nextBlock.usedIds.includes(currentId));
+});
+
+test("older active and pending configurations acquire frequency defaults without altering play", () => {
+  const original = start("snapper");
+  original.pendingConfig = structuredClone(original.config);
+  for (const config of [original.config, original.pendingConfig]) {
+    for (const key of ["formatBalance", "formatWeights", "categoryWeights", "difficultyWeights"])
+      delete (config as unknown as Record<string, unknown>)[key];
+  }
+  const recovered = migrateSession(original, 10);
+  assert.equal(recovered.config.formatBalance, "inventory");
+  assert.deepEqual(recovered.config.formatWeights, {});
+  assert.deepEqual(recovered.pendingConfig?.difficultyWeights, {});
+  assert.deepEqual(recovered.question, original.question);
+  assert.deepEqual(recovered.usedIds, original.usedIds);
+  assert.equal(migrateSession(recovered, 20), recovered);
+});

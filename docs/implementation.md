@@ -250,7 +250,7 @@ Reservoir samples are shuffled before a group contributes only part of a block;
 taking an unshuffled prefix would favor early index entries. Index/shard reads
 and caches remain bounded.
 
-Format choices are independently weighted by matching question inventory:
+By default, format choices are independently weighted by matching question inventory:
 Tossup/Snapper use authored plus imported counts, Assigned uses one quarter of
 the same short inventory weight when a full block is possible, and Open/team count distinct question
 parts of fully eligible groups. Sequence/clues use authored item counts.
@@ -260,11 +260,11 @@ not exact unseen remainder or remote provider inventory. Authored counts exclude
 seen content. Exhausted choices fall through to another format; no-repeat and
 filter rules remain authoritative. Missing manifests retain safe fallback paths
 without adding provider requests or eagerly reading all shards.
-The Assigned reduction applies in FFA and team mode, including unknown-inventory
-fallbacks. Internally other weights are multiplied by four while Assigned keeps
-its raw weight, preserving exact integer tickets for small pools. Check full
-block availability before applying the frequency multiplier; round sizes and
-equal-opportunity rules remain unchanged.
+The default Assigned reduction applies in FFA and team mode, including unknown-inventory
+fallbacks, and is now owner-configurable. Continuous weighted tickets replace the
+previous integer scaling to support fractional preferences without rounding tiny
+pools to zero. Check raw full-block availability before applying frequency
+multipliers; round sizes and equal-opportunity rules remain unchanged.
 
 Mixed sourcing now randomly tries repository or live content first with equal
 probability for each supported block, falling back to the other if necessary.
@@ -312,6 +312,31 @@ language, a reviewed canonical answer, useful explicit aliases, and provenance.
 Use `promptAliases` only when asking for clarification is meaningful. Sequences
 need `orderedItems`; clues need four authored clues. Tossup `powerAt` is a
 **visible character offset**, not a word count. Keep all answer keys server-only.
+
+### Custom question frequencies
+
+The 2026-10-02 lobby settings add `formatBalance`, `formatWeights`,
+`categoryWeights` and `difficultyWeights` to the validated saved configuration.
+Missing fields migrate to the existing inventory-based mix with neutral content
+weights and Assigned at ¼×. Recovery upgrades active and pending configurations
+without replaying a question; owner-only changes still apply at the next block.
+
+`src/components/snapper/config-panel.tsx` exposes type/category frequency selectors,
+a mixed-difficulty mode with Off choices, and a frequency-only type balance for
+small authored pools. Read-only views show the same controls. Reset changes only
+weights; mixed Off difficulties return to 1×. Empty difficulty mixes are rejected.
+
+`src/snapper/selection.ts` supplies fractional weighted sampling. Catalog format
+selection separates raw availability (enough distinct questions to complete a
+block) from weighted inventory. The repository manifest supplies both counts and
+weighted totals without scanning indexes. Repository selection keeps its lazy
+unseen-count correction while multiplying category/difficulty preferences, so
+consumed groups are not favoured. Authored singles and complete groups respect
+these preferences as well. Customized live requests target enabled weighted
+categories/ratings and retain bounded request counts and local fallbacks.
+Relative weights are not guaranteed percentages; available content and provider
+coverage affect the resulting mix. All no-repeat and private-answer boundaries
+remain in place.
 
 ## Production deployment
 
@@ -370,6 +395,24 @@ by the local emulator. Verify updates on the public origin after deployment,
 without changing an active game to run QA.
 
 ## Verification log
+
+Custom question frequencies, verified locally on 2026-10-03; deployment verification pending:
+
+- All **209 unit tests** and **9 multiplayer integration checks** pass. New cases
+  cover schema validation/default migration, weighted odds, frequency-only type
+  balance, multiplied category/difficulty preferences, depleted groups, Off
+  difficulties, live provider targeting and complete Assigned blocks.
+- Owner-only frequency updates persist across reconnects and sessions, apply at
+  the next block, and preserve current question identity, scores and seen IDs.
+  The active/pending configuration recovery test preserves older saved behavior.
+- Production build, frontend/Worker typechecking and scoped lint pass. Desktop
+  and mobile smoke checks pass on development and built output with matching
+  verdicts and no console, overflow, brand or auth warnings.
+- Interactive Chrome verification covers selecting frequencies, rejecting an
+  all-Off difficulty mix, saving/reopening, resetting preferences, and desktop/
+  mobile layouts. All preview and settings screenshots were visually reviewed
+  (`screenshots/snapper-frequency-*`). Original local settings were restored;
+  production was not changed.
 
 Question-source expansion, verified locally on 2026-10-01; **not deployed**:
 

@@ -249,6 +249,15 @@ export function migrateSession(previous: Session, now: number): Session {
     previous.teamNames &&
     previous.reactions &&
     previous.reactionAt &&
+    previous.config.formatBalance &&
+    previous.config.formatWeights &&
+    previous.config.categoryWeights &&
+    previous.config.difficultyWeights &&
+    (!previous.pendingConfig ||
+      (previous.pendingConfig.formatBalance &&
+        previous.pendingConfig.formatWeights &&
+        previous.pendingConfig.categoryWeights &&
+        previous.pendingConfig.difficultyWeights)) &&
     sameFormats(formats, previous.config.formats) &&
     (!previous.pendingConfig || sameFormats(pendingFormats!, previous.pendingConfig.formats)) &&
     !(previous.block && "shoot" in previous.block) &&
@@ -260,8 +269,8 @@ export function migrateSession(previous: Session, now: number): Session {
   state.teamNames ??= clone(DEFAULT_TEAM_NAMES);
   state.reactions ??= [];
   state.reactionAt ??= {};
-  state.config.formats = formats;
-  if (state.pendingConfig) state.pendingConfig.formats = pendingFormats!;
+  state.config = configSchema.parse(state.config);
+  if (state.pendingConfig) state.pendingConfig = configSchema.parse(state.pendingConfig);
   if (state.block) delete (state.block as Block & { shoot?: unknown }).shoot;
   if (state.question) delete (state.question as Question & { baseShoot?: unknown }).baseShoot;
   if (legacyBlock && state.block) {

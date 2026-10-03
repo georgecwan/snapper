@@ -1,6 +1,8 @@
+import { contentWeight, formatWeight, weightedPick, weightedSample } from "./selection.ts";
 import { CLUES, GROUPS, SEQUENCES, SHORTS, TOSSUPS } from "./bank.ts";
 import {
   normalizeFormats,
+  DIFFICULTIES,
   type Format,
   type PlayerView,
   type QuestionAtom,
@@ -19,7 +21,7 @@ export type RepositoryQuestionLoader = (
 /** Matching immutable inventory sizes, not a count of this session's unseen questions. */
 export type RepositoryQuestionCounts = (
   config: RoomConfig,
-) => Promise<{ tossup: number; snapper: number }>;
+) => Promise<{ tossup: number; snapper: number; weights?: { tossup: number; snapper: number } }>;
 
 /** Content identity ignores provider IDs, punctuation and harmless spacing. */
 export function contentId(text: string): string {
@@ -47,45 +49,32 @@ const one = (format: Format, title: string, q: QuestionAtom): QuestionBundle => 
 });
 const randomIndex = (length: number, random: () => number) =>
   Math.min(length - 1, Math.max(0, Math.floor(random() * length)));
-function shuffled<T>(items: T[], random: () => number): T[] {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = randomIndex(i + 1, random);
-    [result[i], result[j]] = [result[j]!, result[i]!];
-  }
-  return result;
-}
 function weightedFormats(
   candidates: Array<{ format: Format; weight: number }>,
   random: () => number,
 ): Format[] {
-  const remaining = candidates.filter(({ weight }) => weight > 0);
-  const result: Format[] = [];
-  while (remaining.length) {
-    const total = remaining.reduce((sum, candidate) => sum + candidate.weight, 0);
-    let ticket = remaining.length === 1 ? 0 : randomIndex(total, random);
-    const index = remaining.findIndex((candidate) => {
-      if (ticket < candidate.weight) return true;
-      ticket -= candidate.weight;
-      return false;
-    });
-    result.push(remaining.splice(index, 1)[0]!.format);
-  }
-  return result;
+  return weightedSample(candidates, candidates.length, (candidate) => candidate.weight, random).map(
+    (candidate) => candidate.format,
+  );
 }
 const eligible = (q: QuestionAtom, config: RoomConfig, used: Set<string>) =>
   !used.has(q.id) &&
-  config.categories.includes(q.category as RoomConfig["categories"][number]) &&
   q.language === config.language &&
-  (config.difficulty === "any" || config.difficulty === q.difficulty);
-function authoredInventory(config: RoomConfig, used: Set<string>): Record<Format, number> {
+  contentWeight(config, q.category, q.difficulty) > 0;
+function authoredInventory(
+  config: RoomConfig,
+  used: Set<string>,
+  weighted = false,
+): Record<Format, number> {
   const count = (questions: QuestionAtom[]) =>
-    new Set(
-      questions
-        .map(identified)
-        .filter((q) => eligible(q, config, used))
-        .map((q) => q.id),
-    ).size;
+    [
+      ...new Map(
+        questions
+          .map(identified)
+          .filter((q) => eligible(q, config, used))
+          .map((q) => [q.id, q]),
+      ).values(),
+    ].reduce((sum, q) => sum + (weighted ? contentWeight(config, q.category, q.difficulty) : 1), 0);
   const groups = GROUPS.map((group) => group.atoms.map(identified)).filter((atoms) =>
     atoms.every((q) => eligible(q, config, used)),
   );
@@ -144,7 +133,12 @@ export function bundledOptions(
   if (format === "assigned") {
     const count = bundleSize(format, config, players);
     if (!count || pool.length < count) return [];
-    const atoms = shuffled(pool, random).slice(0, count);
+    const atoms = weightedSample(
+      pool,
+      count,
+      (q) => contentWeight(config, q.category, q.difficulty),
+      random,
+    );
     return [
       {
         id: `${format}-${atoms[0]!.id}`,
@@ -315,6 +309,27 @@ async function external(
   random: () => number,
   needed: number,
 ): Promise<QuestionAtom[]> {
+  const customMix =
+    Object.keys(config.categoryWeights ?? {}).length > 0 ||
+    (config.difficulty === "any" && Object.keys(config.difficultyWeights ?? {}).length > 0);
+  if (customMix) {
+    const categoryMap = format === "tossup" ? qbCategories : triviaCategories;
+    const combinations = config.categories
+      .filter((category) => categoryMap[category])
+      .flatMap((category) =>
+        DIFFICULTIES.filter((level) => level !== "unrated").map((difficulty) => ({
+          category,
+          difficulty,
+        })),
+      );
+    const selected = weightedPick(
+      combinations,
+      (item) => contentWeight(config, item.category, item.difficulty),
+      random,
+    );
+    if (!selected) return [];
+    config = { ...config, categories: [selected.category], difficulty: selected.difficulty };
+  }
   // A provider's guessed rating must never substitute for explicitly unrated content.
   if (config.difficulty === "unrated") return [];
   if (format === "tossup") {
@@ -381,12 +396,17 @@ export async function selectBundle(
   const bothTeams = active.some((p) => p.team === "A") && active.some((p) => p.team === "B");
   const used = new Set(usedIds);
   const inventory = authoredInventory(config, used);
+  const weightedInventory = authoredInventory(config, used, true);
   let imported: Awaited<ReturnType<RepositoryQuestionCounts>> | null = null;
   if (repositoryCounts) {
     try {
       const counts = await repositoryCounts(config);
       if (
-        [counts.tossup, counts.snapper].every((value) => Number.isSafeInteger(value) && value >= 0)
+        [counts.tossup, counts.snapper].every(
+          (value) => Number.isSafeInteger(value) && value >= 0,
+        ) &&
+        (!counts.weights ||
+          Object.values(counts.weights).every((value) => Number.isFinite(value) && value >= 0))
       )
         imported = counts;
     } catch {
@@ -414,12 +434,21 @@ export async function selectBundle(
         const unknownRepository = Boolean(repository && repositoryKind && imported === null);
         const count = inventory[format] + (repositoryKind ? (imported?.[repositoryKind] ?? 0) : 0);
         const enoughForBlock = count >= bundleSize(format, config, players);
-        const inventoryWeight = enoughForBlock ? count : livePossible || unknownRepository ? 1 : 0;
+        const weightedCount =
+          weightedInventory[format] +
+          (repositoryKind
+            ? (imported?.weights?.[repositoryKind] ?? imported?.[repositoryKind] ?? 0)
+            : 0);
+        const inventoryWeight = enoughForBlock
+          ? weightedCount
+          : livePossible || unknownRepository
+            ? 1
+            : 0;
         return {
           format,
-          // Assigned gets one quarter of the usual weight. Scale other formats
-          // by four so the integer ticket sampler stays exact even for tiny pools.
-          weight: inventoryWeight * (format === "assigned" ? 1 : 4),
+          weight:
+            (config.formatBalance === "frequency" && inventoryWeight > 0 ? 1 : inventoryWeight) *
+            formatWeight(config, format),
         };
       }),
     random,
@@ -451,10 +480,19 @@ export async function selectBundle(
         // The original authored bank keeps local play usable if deploy assets are missing.
       }
     }
-    return unique(
-      [...questions, ...shuffled(format === "tossup" ? TOSSUPS : SHORTS, random)],
-      seen,
-    ).slice(0, count);
+    const fallbackPool = unique(
+      format === "tossup" ? TOSSUPS : SHORTS,
+      new Set([...seen, ...questions.map((q) => q.id)]),
+    );
+    return [
+      ...questions,
+      ...weightedSample(
+        fallbackPool,
+        Math.max(0, count - questions.length),
+        (q) => contentWeight(config, q.category, q.difficulty),
+        random,
+      ),
+    ].slice(0, count);
   };
   const block = (format: Format, atoms: QuestionAtom[]): QuestionBundle => ({
     id: `${format}-${atoms[0]!.id}`,
@@ -512,7 +550,15 @@ export async function selectBundle(
             : bundledOptions(format, config, usedIds, players, random);
         if (local.length)
           return {
-            bundle: local[randomIndex(local.length, random)]!,
+            bundle: weightedPick(
+              local,
+              (bundle) =>
+                bundle.atoms.reduce(
+                  (sum, q) => sum + contentWeight(config, q.category, q.difficulty),
+                  0,
+                ) / bundle.atoms.length,
+              random,
+            )!,
             ...(fallback
               ? { message: "The question service is unavailable. Playing from the bundled pack." }
               : {}),

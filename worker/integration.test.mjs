@@ -1433,3 +1433,85 @@ test(
     );
   },
 );
+
+test(
+  "owner frequency settings persist and activate only at the next block",
+  { skip: !origin, timeout: 30_000 },
+  async (t) => {
+    const owner = new Client();
+    const guest = new Client();
+    await owner.http("/dev-owner", {});
+    const original = (await owner.http("/status")).body.config;
+    t.after(async () => {
+      owner.close();
+      guest.close();
+      await owner.http("/config", { config: original });
+    });
+    const preferences = {
+      ...original,
+      mode: "ffa",
+      formats: ["snapper"],
+      categories: ["Science", "History"],
+      difficulty: "any",
+      source: "bundled",
+      autoAdvance: false,
+      shortProgressive: false,
+      graceMs: 30000,
+      formatBalance: "frequency",
+      formatWeights: { snapper: 2, assigned: 0.5 },
+      categoryWeights: { Science: 4 },
+      difficultyWeights: { easy: 0, medium: 1, hard: 0.25, unrated: 0 },
+    };
+    assert.equal((await guest.http("/config", { config: preferences })).status, 403);
+    assert.equal(
+      (
+        await owner.http("/config", {
+          config: {
+            ...preferences,
+            difficultyWeights: { easy: 0, medium: 0, hard: 0, unrated: 0 },
+          },
+        })
+      ).status,
+      400,
+    );
+    assert.equal((await owner.http("/config", { config: preferences })).status, 200);
+    assert.deepEqual((await owner.http("/status")).body.config.categoryWeights, { Science: 4 });
+    await owner.http("/open", { name: "Frequency Owner" });
+    await owner.connect();
+    const ack = async (action) => {
+      const result = await owner.result(owner.send(action));
+      assert.equal(result.type, "ack", JSON.stringify(result));
+    };
+    await ack({ type: "start" });
+    await eventually(() => owner.state.question, "first weighted question");
+    const questionId = owner.state.question.id;
+    const changed = {
+      ...preferences,
+      categoryWeights: { History: 4 },
+      formatWeights: { snapper: 0.5 },
+    };
+    await ack({ type: "configure", config: changed });
+    await eventually(() => owner.state.pendingConfig, "queued preferences");
+    assert.deepEqual(owner.state.config.categoryWeights, { Science: 4 });
+    assert.deepEqual(owner.state.pendingConfig.categoryWeights, { History: 4 });
+    assert.equal(owner.state.question.id, questionId);
+    await ack({ type: "end-block" });
+    await eventually(
+      () => owner.state.config.categoryWeights.History === 4,
+      "preferences at block boundary",
+    );
+    assert.equal(owner.state.pendingConfig, null);
+    owner.close();
+    await sleep(100);
+    owner.state = null;
+    await owner.http("/open", { name: "Frequency Owner" });
+    await owner.connect();
+    assert.deepEqual(owner.state.config.categoryWeights, { History: 4 });
+    assert.equal((await owner.http("/status")).body.config.formatWeights.snapper, 0.5);
+    owner.send({ type: "close-session" });
+    await eventually(
+      () => owner.messages.some((message) => message.type === "ended"),
+      "test session closed",
+    );
+  },
+);

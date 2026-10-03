@@ -69,7 +69,13 @@ function groupedFixture(groups: QuestionAtom[][]) {
     const path = `${directory}/shard.json`;
     result.files.set(index, { shards: [{ path, ids: atoms.map((q) => q.id) }] });
     result.files.set(path, atoms);
-    return { format: "snapper", category, difficulty: "medium", index, count: atoms.length };
+    return {
+      format: "snapper",
+      category,
+      difficulty: atoms[0]!.difficulty,
+      index,
+      count: atoms.length,
+    };
   });
   result.files.set("manifest.json", {
     version: 1,
@@ -491,4 +497,54 @@ test("all private and ambiguous public asset spellings are denied before asset r
     "/api/snapper/status",
   ])
     assert.equal(privateAssetPath(path), false, path);
+});
+
+test("category and difficulty preferences multiply without rounding or scanning all indexes", async () => {
+  const groups = [
+    [question(900), question(901)],
+    [question(902, { difficulty: "hard" }), question(903, { difficulty: "hard" })],
+    [question(904, { category: "History" }), question(905, { category: "History" })],
+  ];
+  const { loader, requests } = groupedFixture(groups);
+  const matching = {
+    ...config,
+    categories: ["Science" as const, "History" as const],
+    difficulty: "any" as const,
+    categoryWeights: { Science: 4 },
+    difficultyWeights: { medium: 1, hard: 0.25 },
+  };
+  assert.deepEqual(await loader.counts(matching), {
+    tossup: 0,
+    snapper: 6,
+    weights: { tossup: 0, snapper: 12 },
+  });
+  assert.deepEqual(requests, ["manifest.json"]);
+  const first = await loader.select("snapper", matching, [], 1, () => 0);
+  assert.equal(first.length, 1);
+  assert.equal(requests.length, 3, "only the selected group index and shard are loaded");
+  const draws = [0, 0, 0];
+  const random = seededRandom(81);
+  for (let n = 0; n < 2400; n++) {
+    const [q] = await loader.select("snapper", matching, [], 1, random);
+    draws[groups.findIndex((group) => group.some((item) => item.id === q?.id))]!++;
+  }
+  for (const [index, expected] of [4 / 6, 1 / 6, 1 / 6].entries())
+    assert.ok(Math.abs(draws[index]! / 2400 - expected) < 0.035, String(draws));
+  const consumed = groups[0]!.map((q) => q.id);
+  let hard = 0;
+  for (let n = 0; n < 800; n++) {
+    const [q] = await loader.select("snapper", matching, consumed, 1, random);
+    assert.ok(q && !consumed.includes(q.id));
+    if (q.difficulty === "hard") hard++;
+  }
+  assert.ok(hard > 350 && hard < 450, String(hard));
+  const batch = await loader.select("snapper", matching, [], 6, random);
+  assert.equal(new Set(batch.map((q) => q.id)).size, 6);
+  const onlyHard = { ...matching, difficultyWeights: { medium: 0, hard: 0.25 } };
+  assert.deepEqual(await loader.counts(onlyHard), {
+    tossup: 0,
+    snapper: 2,
+    weights: { tossup: 0, snapper: 2 },
+  });
+  assert.equal((await loader.select("snapper", onlyHard, [], 6, random)).length, 2);
 });

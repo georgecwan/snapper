@@ -150,8 +150,9 @@ tossup or standalone Snapper can be a one-question block.
   by matching question inventory**, at block boundaries. A format with more
   questions under the saved filters appears more often. Consecutive repeats are
   allowed; do not use a shuffled cycle. This supersedes uniform format choice.
-  Weight formats, not subject categories. **Assigned gets one quarter of the
-  regular selection weight** in both modes; this supersedes its previous full
+  This remains the default; the owner can now customize type, category and
+  difficulty frequencies (approved 2026-10-02). **Assigned defaults to one quarter
+  of the regular selection weight** in both modes; this supersedes its previous full
   inventory weight. With equal matching inventory, four regular blocks are
   expected for each Assigned block; selection remains random, not a fixed cycle.
   Keep complete Assigned rounds and equal primary opportunities within them.
@@ -160,9 +161,25 @@ tossup or standalone Snapper can be a one-question block.
   manifest counts rather than scanning every question or querying live services.
   These are matching inventory estimates, not exact remaining unseen counts;
   exhausted formats are still skipped by the normal no-repeat selection.
+- The owner can choose **By available questions** (the existing inventory-based
+  type balance) or **By my frequencies** (relative block odds independent of pool
+  size). Every enabled type has a frequency control: ¼×, ½×, 1×, 2× or 4×.
+  Assigned retains ¼× by default; other types default to 1×. Complete blocks,
+  team requirements, exhaustion handling and independent random picks remain.
+- Selected categories have the same relative frequency controls. Difficulty can
+  stay at one level or use **Mix difficulties**, with each level independently
+  Off, ¼×, ½×, 1×, 2× or 4×. At least one level must stay on. A single-level
+  filter takes precedence over the remembered mixed-level preferences. Category
+  and difficulty weights multiply per question; matching inventory and source
+  availability still affect the final proportions. Unrated stays a separate level.
+- Reset frequencies restores type/category/difficulty weights (including Assigned
+  at ¼×) without changing enabled types/categories, difficulty mode, type balance,
+  timers or scoring. In mixed difficulty mode this also re-enables any Off levels.
+  Only the owner edits these saved controls; others can inspect them read-only.
+  Older saved configurations and recovered sessions keep their previous defaults.
 - Within a selected format and the saved filters, sample the eligible unseen
-  repository questions fairly, without preferring early entries or depleted
-  groups. A new lobby draws afresh; do not reuse a fixed opening sequence or
+  repository questions in proportion to the owner's category/difficulty weights,
+  without preferring early entries or depleted groups. A new lobby draws afresh; do not reuse a fixed opening sequence or
   persist question history between lobbies.
 - Automatic/manual advancement and the delay are configurable.
 - Content topics, difficulty and available languages are configurable. Do not

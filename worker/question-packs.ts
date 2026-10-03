@@ -1,3 +1,4 @@
+import { contentWeight } from "../src/snapper/selection.ts";
 import { z } from "zod";
 import { CATEGORIES, type QuestionAtom } from "../src/snapper/protocol.ts";
 import {
@@ -233,16 +234,20 @@ export class QuestionPacks {
   /** Inventory weighting reads only the shared manifest, never indexes or answer shards. */
   readonly counts: RepositoryQuestionCounts = async (config) => {
     const counts = { tossup: 0, snapper: 0 };
+    const weights = { tossup: 0, snapper: 0 };
     if (config.language !== "en") return counts;
     const manifest = await this.getManifest();
     if (!manifest) throw new Error("Repository question inventory unavailable");
     for (const group of manifest.groups)
-      if (
-        config.categories.includes(group.category) &&
-        (config.difficulty === "any" || group.difficulty === config.difficulty)
-      )
+      if (contentWeight(config, group.category, group.difficulty) > 0) {
         counts[group.format] += group.count;
-    return counts;
+        weights[group.format] +=
+          group.count * contentWeight(config, group.category, group.difficulty);
+      }
+    return Object.keys(config.categoryWeights ?? {}).length ||
+      Object.keys(config.difficultyWeights ?? {}).length
+      ? { ...counts, weights }
+      : counts;
   };
 
   readonly select: RepositoryQuestionLoader = async (format, config, usedIds, count, random) => {
@@ -253,9 +258,7 @@ export class QuestionPacks {
       manifest.groups
         .filter(
           (group) =>
-            group.format === format &&
-            config.categories.includes(group.category) &&
-            (config.difficulty === "any" || group.difficulty === config.difficulty),
+            group.format === format && contentWeight(config, group.category, group.difficulty) > 0,
         )
         .map((group) => ({ ...group, remaining: group.count }));
     const used = new Set(usedIds);
@@ -266,18 +269,22 @@ export class QuestionPacks {
     // accept that draw with unseen/previous probability before reducing its
     // weight. Otherwise depleted groups would be overrepresented. This is
     // rejection sampling with progressively tighter bounds; each unseen ID
-    // has equal probability without eagerly reading every eligible index.
+    // has probability proportional to its category/difficulty preferences without
+    // eagerly reading every eligible index.
     while (groups.some((group) => group.remaining > 0) && result.length < count) {
       const demand = new Map<(typeof groups)[number], number>();
       for (let n = result.length; n < count;) {
-        const weight = (group: (typeof groups)[number]) =>
+        const availableCount = (group: (typeof groups)[number]) =>
           Math.max(0, group.remaining - (demand.get(group) ?? 0));
+        const weight = (group: (typeof groups)[number]) =>
+          availableCount(group) * contentWeight(config, group.category, group.difficulty);
         const total = groups.reduce((sum, group) => sum + weight(group), 0);
         if (!total) break;
-        let ticket = randomIndex(total, random);
+        let ticket = Math.max(0, Math.min(1 - Number.EPSILON, random())) * total;
         for (const group of groups) {
-          const available = weight(group);
-          if (ticket < available) {
+          const available = availableCount(group);
+          const weightedAvailable = weight(group);
+          if (ticket < weightedAvailable) {
             if (!group.choices) {
               try {
                 const index = await this.getIndex(group);
@@ -298,7 +305,7 @@ export class QuestionPacks {
             n++;
             break;
           }
-          ticket -= available;
+          ticket -= weightedAvailable;
         }
       }
       for (const [group, needed] of demand) {

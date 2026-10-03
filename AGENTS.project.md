@@ -72,8 +72,11 @@ verification plan.
   Normalize legacy Shootout settings to Snapper once. Recover an active legacy
   block as a final-current-question Snapper and release its unasked tail back to
   the pool. Preserve equal-opportunity Assigned rounds for unequal teams.
-- Select formats independently, weighted by matching question inventory under
-  the saved filters. Assigned uses one quarter of the regular selection weight;
+- Select formats independently at block boundaries. Matching-inventory weighting
+  remains the default; the owner can instead use frequency-only type balancing,
+  and customize relative type, category and mixed-difficulty weights. Category
+  and difficulty weights multiply per question; Off mixed difficulties remain
+  excluded. Assigned defaults to one quarter of regular selection weight;
   retain its complete, equal-opportunity blocks. Imported weights use manifest counts, not exhaustive reads
   or provider API calls; skip exhausted pools without repeating questions.
   Mixed sources randomly try local or live first with equal probability, then

@@ -109,6 +109,8 @@ export const CATEGORIES = [
   "Philosophy",
   "Social Science",
 ] as const;
+export const DIFFICULTIES = ["easy", "medium", "hard", "unrated"] as const;
+const frequency = z.number().min(0.25).max(4).multipleOf(0.25);
 export const configSchema = z
   .object({
     mode: z.enum(["ffa", "teams"]),
@@ -119,6 +121,12 @@ export const configSchema = z
       .refine((v) => new Set(v).size === v.length),
     categories: z.array(z.enum(CATEGORIES)).min(1).max(CATEGORIES.length),
     difficulty: z.enum(["easy", "medium", "hard", "unrated", "any"]),
+    formatBalance: z.enum(["inventory", "frequency"]).default("inventory"),
+    formatWeights: z.partialRecord(z.enum(FORMATS), frequency).default({}),
+    categoryWeights: z.partialRecord(z.enum(CATEGORIES), frequency).default({}),
+    difficultyWeights: z
+      .partialRecord(z.enum(DIFFICULTIES), frequency.or(z.literal(0)))
+      .default({}),
     language: z.literal("en"),
     source: z.enum(["mixed", "bundled"]),
     wpm: z.number().int().min(80).max(500),
@@ -145,6 +153,12 @@ export const configSchema = z
       .strict(),
   })
   .strict()
+  .refine(
+    (config) =>
+      config.difficulty !== "any" ||
+      DIFFICULTIES.some((level) => (config.difficultyWeights[level] ?? 1) > 0),
+    { message: "Keep at least one difficulty enabled.", path: ["difficultyWeights"] },
+  )
   .transform((config) => ({ ...config, formats: normalizeFormats(config.mode, config.formats) }));
 export type RoomConfig = z.infer<typeof configSchema>;
 export const DEFAULT_CONFIG: RoomConfig = {
@@ -152,6 +166,10 @@ export const DEFAULT_CONFIG: RoomConfig = {
   formats: normalizeFormats("ffa", FORMATS),
   categories: ["Science", "Math", "History", "Literature", "Arts", "Geography", "Canada", "Sport"],
   difficulty: "medium",
+  formatBalance: "inventory",
+  formatWeights: {},
+  categoryWeights: {},
+  difficultyWeights: {},
   language: "en",
   source: "mixed",
   wpm: 210,

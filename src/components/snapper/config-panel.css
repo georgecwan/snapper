@@ -1,0 +1,95 @@
+.mix-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 8px;
+}
+.mix-section-heading h3,
+.mix-heading {
+  font-size: 14px;
+  font-weight: 750;
+  margin: 0;
+}
+.mix-heading {
+  margin: 24px 0 12px;
+}
+.mix-reset {
+  border: 0;
+  background: transparent;
+  color: var(--blue, #175cd3);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 12px;
+  min-height: 36px;
+}
+.frequency-grid {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+.frequency-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 1px solid #dce2ec;
+  border-radius: 10px;
+  background: #f8f9fc;
+}
+.frequency-row.enabled {
+  background: white;
+}
+.frequency-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
+}
+.frequency-choice input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #235cff;
+}
+.frequency-choice small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #596579;
+  margin-top: 3px;
+}
+.frequency-name {
+  font-size: 14px;
+  font-weight: 650;
+}
+.frequency-select {
+  flex: 0 0 158px;
+}
+.frequency-select select {
+  width: 100%;
+  min-height: 44px;
+  font-size: 12px;
+}
+.frequency-select select:disabled {
+  opacity: 0.55;
+}
+@media (max-width: 480px) {
+  .frequency-row {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .frequency-choice {
+    font-size: 12px;
+    gap: 7px;
+  }
+  .frequency-select {
+    flex-basis: 142px;
+  }
+}

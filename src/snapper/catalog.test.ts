@@ -726,3 +726,133 @@ test("an unavailable local-first pool still falls back to the live source", asyn
   assert.equal(requests, 1);
   assert.equal(selected.bundle?.atoms[0]?.id, contentId(liveTossup.question_sanitized));
 });
+
+test("saved frequency settings migrate defaults and reject invalid or empty mixes", () => {
+  const legacy = { ...DEFAULT_CONFIG } as Record<string, unknown>;
+  for (const key of ["formatBalance", "formatWeights", "categoryWeights", "difficultyWeights"])
+    delete legacy[key];
+  const migrated = configSchema.parse(legacy);
+  assert.deepEqual(migrated.formatWeights, {});
+  assert.deepEqual(migrated.categoryWeights, {});
+  assert.deepEqual(migrated.difficultyWeights, {});
+  assert.equal(migrated.formatBalance, "inventory");
+  assert.equal(migrated.difficulty, "medium");
+  for (const extra of [
+    { formatWeights: { snapper: -1 } },
+    { categoryWeights: { Science: Infinity } },
+    { categoryWeights: { Unknown: 2 } },
+    { difficultyWeights: { hard: 99 } },
+    { formatBalance: "unknown" },
+    { formatWeights: { assigned: 0 } },
+    { difficulty: "any", difficultyWeights: { easy: 0, medium: 0, hard: 0, unrated: 0 } },
+  ])
+    assert.equal(configSchema.safeParse({ ...DEFAULT_CONFIG, ...extra }).success, false);
+});
+
+test("format frequencies change odds, with an optional inventory-independent mix", async () => {
+  for (const formatBalance of ["inventory", "frequency"] as const) {
+    let tossups = 0;
+    for (let ticket = 0; ticket < 100; ticket++) {
+      const result = await selectBundle(
+        {
+          ...config,
+          formatBalance,
+          formats: ["tossup", "snapper"],
+          categories: ["Science"],
+          difficulty: "hard",
+          formatWeights: { tossup: 0.25, snapper: 1 },
+        },
+        [],
+        players,
+        fetch,
+        () => (ticket + 0.5) / 100,
+        async () => [packedQuestion(910)],
+        async () => ({ tossup: 400, snapper: 100 }),
+      );
+      if (result.bundle?.format === "tossup") tossups++;
+    }
+    assert.equal(tossups, formatBalance === "inventory" ? 50 : 20);
+  }
+});
+
+test("category frequencies affect authored fallback while Off difficulties remain excluded", async () => {
+  const matching = {
+    ...config,
+    formats: ["snapper" as const],
+    categories: ["Science" as const, "History" as const],
+    difficulty: "any" as const,
+    categoryWeights: { Science: 4 },
+    difficultyWeights: { medium: 1, easy: 0, hard: 0, unrated: 0 },
+  };
+  const options = bundledOptions("snapper", matching, [], players);
+  const science = options.filter((b) => b.atoms[0]!.category === "Science").length;
+  const history = options.length - science;
+  let selectedScience = 0;
+  let seed = 981;
+  const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+  for (let n = 0; n < 1200; n++) {
+    const result = await selectBundle(matching, [], players, fetch, random);
+    assert.equal(result.bundle?.atoms[0]?.difficulty, "medium");
+    if (result.bundle?.atoms[0]?.category === "Science") selectedScience++;
+  }
+  assert.ok(Math.abs(selectedScience / 1200 - (4 * science) / (4 * science + history)) < 0.04);
+  const exhausted = await selectBundle(
+    matching,
+    options.flatMap((b) => b.atoms.map((q) => q.id)),
+    players,
+  );
+  assert.equal(exhausted.bundle, null);
+});
+
+test("fractional preferences still allow a complete Assigned round", async () => {
+  const result = await selectBundle(
+    { ...config, formats: ["assigned"], categoryWeights: { Science: 0.25 } },
+    [],
+    players,
+    fetch,
+    () => 0.5,
+  );
+  assert.equal(result.bundle?.atoms.length, 16);
+  assert.equal(new Set(result.bundle?.atoms.map((q) => q.id)).size, 16);
+});
+
+test("custom mixed difficulty targets live requests and never substitutes disabled ratings", async () => {
+  const matching = {
+    ...config,
+    source: "mixed" as const,
+    formats: ["tossup" as const],
+    categories: ["Science" as const],
+    difficulty: "any" as const,
+    difficultyWeights: { easy: 0, medium: 0, hard: 4, unrated: 0 },
+  };
+  let calls = 0;
+  const result = await selectBundle(
+    matching,
+    [],
+    players,
+    async (input) => {
+      calls++;
+      const url = new URL(String(input));
+      assert.equal(url.searchParams.get("difficulties"), "4");
+      assert.equal(url.searchParams.get("categories"), "Science");
+      return Response.json({ tossups: [liveTossup] });
+    },
+    () => 0,
+  );
+  assert.equal(calls, 1);
+  assert.equal(result.bundle?.atoms[0]?.difficulty, "hard");
+  const unratedOnly = {
+    ...matching,
+    difficultyWeights: { easy: 0, medium: 0, hard: 0, unrated: 1 },
+  };
+  const empty = await selectBundle(
+    unratedOnly,
+    [],
+    players,
+    async () => {
+      throw new Error("No rated live request allowed");
+    },
+    () => 0,
+  );
+  assert.equal(empty.bundle, null);
+});
